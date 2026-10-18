@@ -1,16 +1,69 @@
+
 const { randomUUID } = require("crypto");
 
-const offers = [];
+const {
+  DynamoDBDocumentClient,
+  GetCommand,
+  PutCommand,
+  ScanCommand,
+  QueryCommand,
+  DeleteCommand
+} = require("@aws-sdk/lib-dynamodb");
 
-function getAllOffers() {
+const { client } = require("../config/db");
+
+const dynamoDB = DynamoDBDocumentClient.from(client);
+
+const TABLE_NAME = "Offers";
+
+// GET ALL OFFERS
+async function getAllOffers(applicationId) {
+  const offers = [];
+  let lastKey;
+
+  do {
+    const params = applicationId
+      ? {
+          TableName: TABLE_NAME,
+          IndexName: "applicationId-index",
+          KeyConditionExpression: "applicationId = :id",
+          ExpressionAttributeValues: {
+            ":id": applicationId
+          },
+          ExclusiveStartKey: lastKey
+        }
+      : {
+          TableName: TABLE_NAME,
+          ExclusiveStartKey: lastKey
+        };
+
+    const result = await dynamoDB.send(
+      applicationId
+        ? new QueryCommand(params)
+        : new ScanCommand(params)
+    );
+
+    offers.push(...(result.Items || []));
+    lastKey = result.LastEvaluatedKey;
+  } while (lastKey);
+
   return offers;
 }
 
-function getOfferById(id) {
-  return offers.find(offer => offer.offerId === id);
+// GET OFFER BY ID
+async function getOfferById(id) {
+  const result = await dynamoDB.send(
+    new GetCommand({
+      TableName: TABLE_NAME,
+      Key: { offerId: id }
+    })
+  );
+
+  return result.Item || null;
 }
 
-function createOffer(data) {
+// CREATE OFFER
+async function createOffer(data) {
   const offer = {
     offerId: randomUUID(),
     applicationId: data.applicationId,
@@ -20,38 +73,63 @@ function createOffer(data) {
     responseDeadline: data.responseDeadline
   };
 
-  offers.push(offer);
+  await dynamoDB.send(
+    new PutCommand({
+      TableName: TABLE_NAME,
+      Item: offer,
+      ConditionExpression: "attribute_not_exists(offerId)"
+    })
+  );
+
   return offer;
 }
 
-function updateOffer(id, data) {
-  const offer = getOfferById(id);
-  if (!offer) return null;
+// UPDATE OFFER
+async function updateOffer(id, data) {
+  const existing = await getOfferById(id);
 
-  const allowed = [
+  if (!existing) return null;
+
+  const allowedFields = [
     "offerDate",
     "salary",
     "offerStatus",
     "responseDeadline"
   ];
 
-  for (const field of allowed) {
+  const updated = { ...existing };
+
+  for (const field of allowedFields) {
     if (Object.prototype.hasOwnProperty.call(data, field)) {
-      offer[field] = data[field];
+      updated[field] = data[field];
     }
   }
 
-  return offer;
-}
-
-function deleteOffer(id) {
-  const index = offers.findIndex(
-    offer => offer.offerId === id
+  await dynamoDB.send(
+    new PutCommand({
+      TableName: TABLE_NAME,
+      Item: updated,
+      ConditionExpression: "attribute_exists(offerId)"
+    })
   );
 
-  if (index === -1) return false;
+  return updated;
+}
 
-  offers.splice(index, 1);
+// DELETE OFFER
+async function deleteOffer(id) {
+  const existing = await getOfferById(id);
+
+  if (!existing) return false;
+
+  await dynamoDB.send(
+    new DeleteCommand({
+      TableName: TABLE_NAME,
+      Key: { offerId: id },
+      ConditionExpression: "attribute_exists(offerId)"
+    })
+  );
+
   return true;
 }
 

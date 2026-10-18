@@ -1,7 +1,21 @@
+
 const { randomUUID } = require("crypto");
 
-const applications = [];
-const activities = [];
+const {
+  DynamoDBDocumentClient,
+  GetCommand,
+  PutCommand,
+  ScanCommand,
+  DeleteCommand,
+  QueryCommand
+} = require("@aws-sdk/lib-dynamodb");
+
+const { client } = require("../config/db");
+
+const dynamoDB = DynamoDBDocumentClient.from(client);
+
+const APPLICATION_TABLE = "JobApplications";
+const ACTIVITY_TABLE = "ApplicationActivity";
 
 const validStatuses = [
   "Applied",
@@ -11,63 +25,165 @@ const validStatuses = [
   "Rejected"
 ];
 
-function getAllApplications() {
+// GET ALL APPLICATIONS
+async function getAllApplications() {
+  const applications = [];
+  let lastKey;
+
+  do {
+    const result = await dynamoDB.send(
+      new ScanCommand({
+        TableName: APPLICATION_TABLE,
+        ExclusiveStartKey: lastKey
+      })
+    );
+
+    applications.push(...(result.Items || []));
+    lastKey = result.LastEvaluatedKey;
+  } while (lastKey);
+
   return applications;
 }
 
-function getApplicationById(id) {
-  return applications.find(app => app.applicationId === id);
+// GET APPLICATION BY ID
+async function getApplicationById(id) {
+  const result = await dynamoDB.send(
+    new GetCommand({
+      TableName: APPLICATION_TABLE,
+      Key: {
+        applicationId: id
+      }
+    })
+  );
+
+  return result.Item || null;
 }
 
-function createApplication(data) {
+// CREATE APPLICATION
+async function createApplication(data) {
   const application = {
     applicationId: randomUUID(),
     studentId: data.studentId,
     company: data.company,
     jobTitle: data.jobTitle,
     status: "Applied",
-    appliedDate: data.appliedDate || new Date().toISOString().slice(0, 10)
+    appliedDate:
+      data.appliedDate ||
+      new Date().toISOString().slice(0, 10)
   };
 
-  applications.push(application);
+  await dynamoDB.send(
+    new PutCommand({
+      TableName: APPLICATION_TABLE,
+      Item: application,
+      ConditionExpression:
+        "attribute_not_exists(applicationId)"
+    })
+  );
+
   return application;
 }
 
-function updateApplication(id, data) {
-  const application = getApplicationById(id);
+// UPDATE APPLICATION
+async function updateApplication(id, data) {
+  const application = await getApplicationById(id);
+
   if (!application) return null;
 
   const previousStatus = application.status;
 
-  Object.assign(application, data);
+  const allowedFields = [
+    "company",
+    "jobTitle",
+    "status",
+    "appliedDate"
+  ];
 
+  const updatedApplication = { ...application };
+
+  for (const field of allowedFields) {
+    if (Object.prototype.hasOwnProperty.call(data, field)) {
+      updatedApplication[field] = data[field];
+    }
+  }
+
+  await dynamoDB.send(
+    new PutCommand({
+      TableName: APPLICATION_TABLE,
+      Item: updatedApplication,
+      ConditionExpression:
+        "attribute_exists(applicationId)"
+    })
+  );
+
+  // Record application status changes
   if (data.status && data.status !== previousStatus) {
-    activities.push({
+    const activity = {
       activityId: randomUUID(),
       applicationId: id,
       activityType: "STATUS_CHANGED",
       activityDate: new Date().toISOString(),
-      description: `${previousStatus} to ${data.status}`
-    });
+      description:
+        `${previousStatus} to ${data.status}`
+    };
+
+    await dynamoDB.send(
+      new PutCommand({
+        TableName: ACTIVITY_TABLE,
+        Item: activity
+      })
+    );
   }
 
-  return application;
+  return updatedApplication;
 }
 
-function deleteApplication(id) {
-  const index = applications.findIndex(
-    app => app.applicationId === id
+// DELETE APPLICATION
+async function deleteApplication(id) {
+  const application = await getApplicationById(id);
+
+  if (!application) return false;
+
+  await dynamoDB.send(
+    new DeleteCommand({
+      TableName: APPLICATION_TABLE,
+      Key: {
+        applicationId: id
+      },
+      ConditionExpression:
+        "attribute_exists(applicationId)"
+    })
   );
 
-  if (index === -1) return false;
-
-  applications.splice(index, 1);
   return true;
 }
 
-function getApplicationHistory(id) {
-  return activities.filter(
-    activity => activity.applicationId === id
+// GET APPLICATION STATUS HISTORY
+async function getApplicationHistory(id) {
+  const activities = [];
+  let lastKey;
+
+  do {
+    const result = await dynamoDB.send(
+      new QueryCommand({
+        TableName: ACTIVITY_TABLE,
+        IndexName: "applicationId-index",
+        KeyConditionExpression:
+          "applicationId = :id",
+        ExpressionAttributeValues: {
+          ":id": id
+        },
+        ExclusiveStartKey: lastKey
+      })
+    );
+
+    activities.push(...(result.Items || []));
+    lastKey = result.LastEvaluatedKey;
+  } while (lastKey);
+
+  return activities.sort(
+    (a, b) =>
+      a.activityDate.localeCompare(b.activityDate)
   );
 }
 

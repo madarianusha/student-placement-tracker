@@ -1,42 +1,90 @@
+
 const { randomUUID } = require("crypto");
 
-const students = [];
+const { DynamoDBDocumentClient, GetCommand, PutCommand, ScanCommand, DeleteCommand } = require("@aws-sdk/lib-dynamodb");
 
-function getAllStudents() {
+const { client } = require("../config/db");
+
+const dynamoDB = DynamoDBDocumentClient.from(client);
+const TABLE_NAME = "Students";
+
+// Get all students
+async function getAllStudents() {
+  const students = [];
+  let lastKey;
+
+  do {
+    const result = await dynamoDB.send(new ScanCommand({
+      TableName: TABLE_NAME,
+      ExclusiveStartKey: lastKey
+    }));
+
+    students.push(...(result.Items || []));
+    lastKey = result.LastEvaluatedKey;
+  } while (lastKey);
+
   return students;
 }
 
-function getStudentById(id) {
-  return students.find(student => student.studentId === id);
+// Get student by ID
+async function getStudentById(id) {
+  const result = await dynamoDB.send(new GetCommand({
+    TableName: TABLE_NAME,
+    Key: { studentId: id }
+  }));
+
+  return result.Item || null;
 }
 
-function createStudent(data) {
+// Create student
+async function createStudent(data) {
   const student = {
     studentId: randomUUID(),
     ...data
   };
 
-  students.push(student);
+  await dynamoDB.send(new PutCommand({
+    TableName: TABLE_NAME,
+    Item: student,
+    ConditionExpression: "attribute_not_exists(studentId)"
+  }));
+
   return student;
 }
 
-function updateStudent(id, data) {
-  const student = getStudentById(id);
-
+// Update student
+async function updateStudent(id, data) {
+  const student = await getStudentById(id);
   if (!student) return null;
 
-  Object.assign(student, data);
+  const allowed = ["name", "email", "major", "graduationYear"];
+
+  for (const field of allowed) {
+    if (Object.prototype.hasOwnProperty.call(data, field)) {
+      student[field] = data[field];
+    }
+  }
+
+  await dynamoDB.send(new PutCommand({
+    TableName: TABLE_NAME,
+    Item: student,
+    ConditionExpression: "attribute_exists(studentId)"
+  }));
+
   return student;
 }
 
-function deleteStudent(id) {
-  const index = students.findIndex(
-    student => student.studentId === id
-  );
+// Delete student
+async function deleteStudent(id) {
+  const student = await getStudentById(id);
+  if (!student) return false;
 
-  if (index === -1) return false;
+  await dynamoDB.send(new DeleteCommand({
+    TableName: TABLE_NAME,
+    Key: { studentId: id },
+    ConditionExpression: "attribute_exists(studentId)"
+  }));
 
-  students.splice(index, 1);
   return true;
 }
 
