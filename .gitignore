@@ -1,19 +1,32 @@
-.env# Node.js dependencies
+
+# Dependencies
 node_modules/
+**/node_modules/
 
 # Environment variables
 .env
 .env.*
 !.env.example
 
-# Build files
+# Build output
 dist/
 build/
+coverage/
 
 # Logs
 *.log
+npm-debug.log*
 
-# Local DynamoDB data
+# Local database files
 *.db
+*.db-journal
 *.sqlite
 *.sqlite3
+
+# Local database storage
+data/
+
+# OS and editor files
+.DS_Store
+Thumbs.db
+.vscode/

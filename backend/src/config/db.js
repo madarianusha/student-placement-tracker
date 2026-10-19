@@ -15,7 +15,7 @@ const client = new DynamoDBClient({
 
   endpoint:
     process.env.DYNAMODB_ENDPOINT ||
-    "http://localhost:8000",
+    "http://localhost:8002",
 
   credentials: {
     accessKeyId: process.env.AWS_ACCESS_KEY_ID || "local",
@@ -26,4 +26,4 @@ const client = new DynamoDBClient({
 
 const db = DynamoDBDocumentClient.from(client);
 
-module.exports = { client, DynamoDB };
+module.exports = { client, db, DynamoDB };
