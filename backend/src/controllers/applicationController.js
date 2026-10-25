@@ -1,6 +1,13 @@
 
 const service = require("../services/applicationService");
 const studentService = require("../services/studentService");
+const { db } = require("../../../database/db");
+
+const {
+  GetCommand,
+  ScanCommand,
+  TransactWriteCommand
+} = require("@aws-sdk/lib-dynamodb");
 
 // GET all applications
 exports.getAll = async (req, res) => {
@@ -119,22 +126,118 @@ exports.update = async (req, res) => {
   }
 };
 
+// Find records linked to an application
+async function linkedItems(table, applicationId) {
+  const items = [];
+  let lastKey;
+
+  do {
+    const result = await db.send(
+      new ScanCommand({
+        TableName: table,
+        FilterExpression: "applicationId = :id",
+        ExpressionAttributeValues: {
+          ":id": applicationId
+        },
+        ExclusiveStartKey: lastKey
+      })
+    );
+
+    items.push(...(result.Items || []));
+    lastKey = result.LastEvaluatedKey;
+
+  } while (lastKey);
+
+  return items;
+}
+
 // DELETE application
 exports.remove = async (req, res) => {
-  try {
-    const deleted = await service.deleteApplication(req.params.id);
+  const applicationId = req.params.id;
 
-    if (!deleted) {
+  try {
+    // Check whether application exists
+    const existing = await db.send(
+      new GetCommand({
+        TableName: "JobApplications",
+        Key: { applicationId }
+      })
+    );
+
+    if (!existing.Item) {
       return res.status(404).json({
         message: "Application not found"
       });
     }
 
+    // Check related records
+    const [interviews, offers, tasks, history] =
+      await Promise.all([
+        linkedItems("Interviews", applicationId),
+        linkedItems("Offers", applicationId),
+        linkedItems("Tasks", applicationId),
+        linkedItems("ApplicationActivity", applicationId)
+      ]);
+
+    // Prevent deleting applications with linked records
+    if (
+      interviews.length > 0 ||
+      offers.length > 0 ||
+      tasks.length > 0
+    ) {
+      return res.status(409).json({
+        message:
+          "Delete linked interviews, offers, and tasks first"
+      });
+    }
+
+    // DynamoDB transactions support up to 100 operations
+    if (history.length > 99) {
+      return res.status(409).json({
+        message:
+          "Too many history records to delete in one operation"
+      });
+    }
+
+    // Delete internal history and application together
+    const operations = history.map((item) => ({
+      Delete: {
+        TableName: "ApplicationActivity",
+        Key: {
+          activityId: item.activityId
+        }
+      }
+    }));
+
+    operations.push({
+      Delete: {
+        TableName: "JobApplications",
+        Key: { applicationId },
+        ConditionExpression:
+          "attribute_exists(applicationId)"
+      }
+    });
+
+    await db.send(
+      new TransactWriteCommand({
+        TransactItems: operations
+      })
+    );
+
     res.json({
       message: "Application deleted successfully"
     });
+
   } catch (error) {
-    console.error(error);
+    console.error("Delete application error:", error);
+
+    if (error.name === "TransactionCanceledException") {
+      return res.status(409).json({
+        message:
+          "Application deletion could not be completed. Refresh and try again."
+      });
+    }
+
     res.status(500).json({
       message: "Failed to delete application"
     });

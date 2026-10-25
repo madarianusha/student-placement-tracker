@@ -1,11 +1,216 @@
-import React,{useEffect,useMemo,useState} from 'react';import{BrowserRouter,NavLink,Route,Routes}from'react-router-dom';import{LayoutDashboard,BriefcaseBusiness,CalendarDays,GraduationCap,Plus,Search,Trash2,PenLine,CheckCircle2,Clock,Menu}from'lucide-react';import{applicationsAPI}from'./services/api';
-const seed=[{applicationId:'a1',company:'Google',jobTitle:'Software Engineer',status:'Interview',appliedDate:'2026-10-02',location:'Remote'},{applicationId:'a2',company:'Microsoft',jobTitle:'Frontend Developer',status:'Applied',appliedDate:'2026-10-05',location:'Seattle, WA'},{applicationId:'a3',company:'Amazon',jobTitle:'Cloud Engineer',status:'Offer',appliedDate:'2026-09-25',location:'Austin, TX'},{applicationId:'a4',company:'Adobe',jobTitle:'UI Engineer',status:'Screening',appliedDate:'2026-10-08',location:'Remote'}];
-const seedInterviews=[{id:'i1',company:'Google',role:'Software Engineer',date:'2026-10-19',time:'10:00',type:'Technical',notes:'Review algorithms'}];
-const seedTasks=[{id:'t1',title:'Prepare for Google interview',dueDate:'2026-10-18',done:false},{id:'t2',title:'Update portfolio',dueDate:'2026-10-21',done:false}];
-function AppContent(){const[apps,setApps]=useState(seed),[interviews,setInterviews]=useState(seedInterviews),[tasks,setTasks]=useState(seedTasks),[demo,setDemo]=useState(true),[error,setError]=useState(''),[open,setOpen]=useState(false);useEffect(()=>{applicationsAPI.list().then(data=>{setApps(Array.isArray(data)?data:data.items||[]);setDemo(false)}).catch(()=>setDemo(true))},[]);async function addApp(data){if(demo){setApps(a=>[{...data,applicationId:crypto.randomUUID()},...a]);return}try{const a=await applicationsAPI.create(data);setApps(x=>[a,...x])}catch(e){setError(e.message)}}async function editApp(id,data){if(demo){setApps(a=>a.map(x=>x.applicationId===id?{...x,...data}:x));return}try{await applicationsAPI.update(id,data);setApps(a=>a.map(x=>x.applicationId===id?{...x,...data}:x))}catch(e){setError(e.message)}}async function deleteApp(id){if(!window.confirm('Delete this application?'))return;if(demo){setApps(a=>a.filter(x=>x.applicationId!==id));return}try{await applicationsAPI.remove(id);setApps(a=>a.filter(x=>x.applicationId!==id))}catch(e){setError(e.message)}}return <div className="shell"><aside className={'sidebar '+(open?'show':'')}><div className="brand"><div className="brand-icon"><GraduationCap size={23}/></div><span>Placement<span className="brand-light">Track</span></span></div><div className="side-label">WORKSPACE</div><nav><NavLink to="/" end onClick={()=>setOpen(false)}><LayoutDashboard size={19}/>Dashboard</NavLink><NavLink to="/applications" onClick={()=>setOpen(false)}><BriefcaseBusiness size={19}/>My Applications</NavLink><NavLink to="/interviews" onClick={()=>setOpen(false)}><CalendarDays size={19}/>Interviews & Offers</NavLink></nav><div className="side-bottom"><div className="avatar">ST</div><div><strong>Student Profile</strong><small>Placement workspace</small></div></div></aside><main className="main"><header className="topbar"><button className="mobile-menu" onClick={()=>setOpen(!open)}><Menu/></button><div className="crumb">Student Placement Tracker <span>/ Workspace</span></div><div className="top-right"><span className="dot"/> {demo?'Demo mode':'API connected'} <div className="avatar small">ST</div></div></header>{error&&<div className="error" onClick={()=>setError('')}>{error} ×</div>}<Routes><Route path="/" element={<Dashboard apps={apps} interviews={interviews} tasks={tasks} setTasks={setTasks}/>}/><Route path="/applications" element={<Applications apps={apps} addApp={addApp} editApp={editApp} deleteApp={deleteApp}/>}/><Route path="/interviews" element={<Interviews apps={apps} interviews={interviews} setInterviews={setInterviews}/>}/></Routes><footer>{demo?'Sample data is shown until the backend is available. Changes in demo mode are not saved.':'Connected to Express API'}</footer></main></div>}
-const badge=(s)=><span className={'badge '+(s||'').toLowerCase().replaceAll(' ','-')}>{s}</span>;
-function Dashboard({apps,interviews,tasks,setTasks}){const cards=[['Total Applications',apps.length,'blue'],['In Progress',apps.filter(x=>['Applied','Screening','Interview'].includes(x.status)).length,'purple'],['Upcoming Interviews',interviews.filter(x=>x.date>=new Date().toISOString().slice(0,10)).length,'orange'],['Offers Received',apps.filter(x=>x.status==='Offer').length,'green']];return <div className="content"><div className="page-heading"><div><p className="eyebrow">OVERVIEW</p><h1>Welcome back, Student <span className="wave">👋</span></h1><p>Here's what's happening with your placement journey.</p></div><NavLink className="btn primary" to="/applications"><Plus size={18}/> Add Application</NavLink></div><div className="stats">{cards.map(([name,value,color])=><div className="stat" key={name}><div className={'stat-symbol '+color}><BriefcaseBusiness size={21}/></div><div className="stat-value">{value}</div><div className="stat-name">{name}</div></div>)}</div><div className="two-col"><section className="panel"><div className="panel-head"><div><h2>Recent Applications</h2><p>Your latest job opportunities</p></div><NavLink to="/applications" className="text-link">View all →</NavLink></div><div className="table-scroll"><table><thead><tr><th>Company / Role</th><th>Date</th><th>Status</th></tr></thead><tbody>{apps.slice(0,5).map(a=><tr key={a.applicationId}><td><strong>{a.company}</strong><small>{a.jobTitle}</small></td><td>{a.appliedDate}</td><td>{badge(a.status)}</td></tr>)}</tbody></table></div></section><section className="panel"><div className="panel-head"><div><h2>Pending Tasks</h2><p>Stay on top of your next steps</p></div><span className="counter">{tasks.filter(x=>!x.done).length} left</span></div><div className="task-list">{tasks.map(t=><label className="task" key={t.id}><input type="checkbox" checked={t.done} onChange={()=>setTasks(ts=>ts.map(x=>x.id===t.id?{...x,done:!x.done}:x))}/><span className={t.done?'done':''}><strong>{t.title}</strong><small>Due {t.dueDate}</small></span></label>)}</div><div className="up-next"><Clock size={18}/><span><strong>Next interview</strong><small>{interviews[0]?`${interviews[0].company} • ${interviews[0].date}`:'No interviews scheduled'}</small></span></div></section></div></div>}
-const empty={company:'',jobTitle:'',location:'',status:'Applied',appliedDate:new Date().toISOString().slice(0,10)};
-function Applications({apps,addApp,editApp,deleteApp}){const[search,setSearch]=useState(''),[filter,setFilter]=useState('All'),[modal,setModal]=useState(false),[form,setForm]=useState(empty),[editing,setEditing]=useState(null);const visible=apps.filter(a=>(filter==='All'||a.status===filter)&&`${a.company} ${a.jobTitle}`.toLowerCase().includes(search.toLowerCase()));function start(a){setEditing(a?.applicationId||null);setForm(a||empty);setModal(true)}async function save(e){e.preventDefault();if(editing)await editApp(editing,form);else await addApp(form);setModal(false)}return <div className="content"><div className="page-heading"><div><p className="eyebrow">JOB SEARCH</p><h1>My Applications</h1><p>Organize and manage every opportunity in one place.</p></div><button className="btn primary" onClick={()=>start()}><Plus size={18}/> New Application</button></div><section className="panel"><div className="filters"><div className="search"><Search size={18}/><input placeholder="Search company or job title..." value={search} onChange={e=>setSearch(e.target.value)}/></div><select value={filter} onChange={e=>setFilter(e.target.value)}>{['All','Applied','Screening','Interview','Offer','Rejected','Withdrawn'].map(x=><option key={x}>{x}</option>)}</select></div><div className="table-scroll"><table><thead><tr><th>COMPANY</th><th>JOB TITLE</th><th>LOCATION</th><th>APPLIED</th><th>STATUS</th><th>ACTIONS</th></tr></thead><tbody>{visible.map(a=><tr key={a.applicationId}><td><strong>{a.company}</strong></td><td>{a.jobTitle}</td><td>{a.location||'—'}</td><td>{a.appliedDate}</td><td>{badge(a.status)}</td><td><div className="actions"><button title="Edit" onClick={()=>start(a)}><PenLine size={16}/></button><button title="Delete" onClick={()=>deleteApp(a.applicationId)}><Trash2 size={16}/></button></div></td></tr>)}{!visible.length&&<tr><td colSpan="6" className="empty">No matching applications found.</td></tr>}</tbody></table></div></section>{modal&&<div className="overlay"><form className="modal" onSubmit={save}><div className="panel-head"><h2>{editing?'Edit':'Add'} Application</h2><button type="button" className="close" onClick={()=>setModal(false)}>×</button></div><div className="form-grid">{[['company','Company'],['jobTitle','Job Title'],['location','Location'],['appliedDate','Applied Date']].map(([k,l])=><label key={k}>{l}<input required={k!=='location'} type={k==='appliedDate'?'date':'text'} value={form[k]||''} onChange={e=>setForm({...form,[k]:e.target.value})}/></label>)}<label>Status<select value={form.status} onChange={e=>setForm({...form,status:e.target.value})}>{['Applied','Screening','Interview','Offer','Rejected','Withdrawn'].map(x=><option key={x}>{x}</option>)}</select></label></div><div className="modal-actions"><button type="button" className="btn secondary" onClick={()=>setModal(false)}>Cancel</button><button className="btn primary">Save Application</button></div></form></div>}</div>}
-function Interviews({apps,interviews,setInterviews}){const[form,setForm]=useState({applicationId:'',date:'',time:'',type:'Technical',notes:''}),[show,setShow]=useState(false);function save(e){e.preventDefault();const a=apps.find(x=>x.applicationId===form.applicationId);setInterviews(x=>[...x,{...form,id:crypto.randomUUID(),company:a?.company||'Unknown',role:a?.jobTitle||''}]);setShow(false)}return <div className="content"><div className="page-heading"><div><p className="eyebrow">NEXT STEPS</p><h1>Interviews & Offers</h1><p>Keep track of important conversations and decisions.</p></div><button className="btn primary" onClick={()=>setShow(true)}><Plus size={18}/> Schedule Interview</button></div><div className="two-col"><section className="panel"><div className="panel-head"><div><h2>Scheduled Interviews</h2><p>Prepare for upcoming conversations</p></div></div><div className="interview-list">{interviews.map(i=><div className="interview" key={i.id}><div className="calendar-icon"><CalendarDays/></div><div><strong>{i.company} — {i.role}</strong><small>{i.date} at {i.time} • {i.type}</small>{i.notes&&<p>{i.notes}</p>}</div></div>)}{!interviews.length&&<p className="empty">No interviews scheduled yet.</p>}</div></section><section className="panel"><div className="panel-head"><div><h2>Offers & Decisions</h2><p>Application outcomes at a glance</p></div></div><div className="interview-list">{apps.filter(a=>['Offer','Rejected'].includes(a.status)).map(a=><div className="interview" key={a.applicationId}><div className="calendar-icon"><CheckCircle2/></div><div><strong>{a.company}</strong><small>{a.jobTitle}</small></div>{badge(a.status)}</div>)}{!apps.some(a=>['Offer','Rejected'].includes(a.status))&&<p className="empty">No offers or decisions recorded yet.</p>}</div></section></div>{show&&<div className="overlay"><form className="modal" onSubmit={save}><div className="panel-head"><h2>Schedule Interview</h2><button type="button" className="close" onClick={()=>setShow(false)}>×</button></div><div className="form-grid"><label className="full">Application<select required value={form.applicationId} onChange={e=>setForm({...form,applicationId:e.target.value})}><option value="">Choose application</option>{apps.map(a=><option value={a.applicationId} key={a.applicationId}>{a.company} — {a.jobTitle}</option>)}</select></label><label>Date<input required type="date" value={form.date} onChange={e=>setForm({...form,date:e.target.value})}/></label><label>Time<input required type="time" value={form.time} onChange={e=>setForm({...form,time:e.target.value})}/></label><label>Interview Type<select value={form.type} onChange={e=>setForm({...form,type:e.target.value})}>{['Phone','Technical','Behavioral','HR','Final'].map(x=><option key={x}>{x}</option>)}</select></label><label className="full">Notes<textarea rows="3" value={form.notes} onChange={e=>setForm({...form,notes:e.target.value})}/></label></div><div className="modal-actions"><button type="button" className="btn secondary" onClick={()=>setShow(false)}>Cancel</button><button className="btn primary">Save Interview</button></div></form></div>}</div>}
-export default function App(){return <BrowserRouter><AppContent/></BrowserRouter>}
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import { Navigate, Route, Routes, useLocation, useNavigate } from 'react-router-dom';
+import { AlertCircle, ArrowRight, Check, ChevronDown, ChevronRight, GraduationCap, Menu, RefreshCw, Sparkles, Users, X } from 'lucide-react';
+import { deleteRecord, getList, saveRecord } from './api.js';
+import { KEYS, RESOURCES, isDone } from './format.js';
+import { MENU } from './config/navigation.js';
+import { SCHEMA, DEFAULTS } from './config/forms.js';
+import { InlineError, Modal, SuccessToast } from './components/UI.jsx';
+import Field from './components/RecordField.jsx';
+import Dashboard from './pages/Dashboard.jsx';
+import StudentsPage from './pages/Students.jsx';
+import ApplicationsPage from './pages/Applications.jsx';
+import InterviewsPage from './pages/Interviews.jsx';
+import OffersPage from './pages/Offers.jsx';
+import TasksPage from './pages/Tasks.jsx';
+
+const emptyLists = () => Object.fromEntries(RESOURCES.map(resource => [resource, []]));
+const emptyAvailability = () => Object.fromEntries(RESOURCES.map(resource => [resource, false]));
+
+export default function App() {
+  const location = useLocation();
+  const navigateRoute = useNavigate();
+  const screen = MENU.some(item => item.id === location.pathname.slice(1)) ? location.pathname.slice(1) : 'dashboard';
+  const [drawerOpen, setDrawerOpen] = useState(false);
+  const [selectedStudent, setSelectedStudent] = useState('');
+  const [records, setRecords] = useState(emptyLists);
+  const [availability, setAvailability] = useState(emptyAvailability);
+  const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
+  const [errors, setErrors] = useState([]);
+  const [editor, setEditor] = useState(null);
+  const [toast, setToast] = useState('');
+  const [saving, setSaving] = useState(false);
+  const [modalError, setModalError] = useState('');
+  const [search, setSearch] = useState('');
+  const [busyId, setBusyId] = useState('');
+
+  const reload = useCallback(async (isRefresh = false) => {
+    if (isRefresh) setRefreshing(true);
+    else setLoading(true);
+    const results = await Promise.allSettled(RESOURCES.map(resource => getList(resource)));
+    const nextRecords = {}, nextAvailable = {}, nextErrors = [];
+    results.forEach((result, index) => {
+      const resource = RESOURCES[index];
+      nextAvailable[resource] = result.status === 'fulfilled';
+      if (result.status === 'fulfilled') nextRecords[resource] = result.value;
+      else nextErrors.push(`${resource}: ${result.reason?.message || 'Unable to load'}`);
+    });
+    setRecords(previous => ({ ...previous, ...nextRecords }));
+    setAvailability(nextAvailable);
+    setErrors(nextErrors);
+    setLoading(false);
+    setRefreshing(false);
+  }, []);
+
+  useEffect(() => { reload(); }, [reload]);
+
+  const students = records.students;
+  const applications = records.applications;
+  const studentMap = useMemo(() => new Map(students.map(s => [s.studentId, s])), [students]);
+  const appMap = useMemo(() => new Map(applications.map(a => [a.applicationId, a])), [applications]);
+  const filteredApps = useMemo(() => selectedStudent ? applications.filter(a => a.studentId === selectedStudent) : applications, [applications, selectedStudent]);
+  const appIDs = useMemo(() => new Set(filteredApps.map(a => a.applicationId)), [filteredApps]);
+  const filtered = useMemo(() => ({
+    students: selectedStudent ? students.filter(s => s.studentId === selectedStudent) : students,
+    applications: filteredApps,
+    interviews: selectedStudent ? records.interviews.filter(item => appIDs.has(item.applicationId)) : records.interviews,
+    offers: selectedStudent ? records.offers.filter(item => appIDs.has(item.applicationId)) : records.offers,
+    tasks: selectedStudent ? records.tasks.filter(item => item.studentId === selectedStudent || appIDs.has(item.applicationId)) : records.tasks
+  }), [students, records, selectedStudent, filteredApps, appIDs]);
+
+  function navigate(next) { navigateRoute(next === 'dashboard' ? '/' : `/${next}`); setSearch(''); setDrawerOpen(false); }
+  function openEditor(resource, original=null, preset={}) {
+    setModalError('');
+    setEditor({
+      resource,
+      original,
+      value: original ? { ...original } : { ...DEFAULTS[resource], ...(selectedStudent && ['applications','tasks'].includes(resource) ? { studentId:selectedStudent } : {}), ...preset }
+    });
+  }
+
+  async function submitEditor(event) {
+    event.preventDefault();
+    if (!editor || saving) return;
+    const { resource, original, value } = editor;
+    if (resource === 'applications' && !value.studentId) { setModalError('Choose a student before saving an application.'); return; }
+    if (resource === 'tasks' && value.applicationId) {
+      const linked = appMap.get(value.applicationId);
+      if (linked && linked.studentId !== value.studentId) { setModalError('The task student must match the related application student.'); return; }
+    }
+    if (resource === 'offers' && value.salary !== '' && !Number.isFinite(Number(value.salary))) { setModalError('Enter a valid salary.'); return; }
+    setSaving(true);
+    setModalError('');
+    try {
+      const key = KEYS[resource];
+      const payload = { ...value };
+      // Identifiers are generated and owned by Express; do not send an empty primary key.
+      if (!original) delete payload[key];
+      // Empty optional fields are omitted for creation, but retained for full PUT updates.
+      if (!original) for (const [k,v] of Object.entries(payload)) if (v === '') delete payload[k];
+      if (resource === 'offers' && payload.salary !== undefined && payload.salary !== '') payload.salary = Number(payload.salary);
+      await saveRecord(resource, payload, original?.[key]);
+      setEditor(null);
+      setToast(`${SCHEMA[resource].singular} ${original ? 'updated' : 'created'} successfully.`);
+      await reload(true);
+    } catch(err) {
+      setModalError(err.message || 'Unable to save.');
+    } finally { setSaving(false); }
+  }
+
+  // DELETE -- shared handler for Students, Applications, Interviews, Offers and Tasks.
+  async function remove(resource, item) {
+    const id = item[KEYS[resource]];
+    if (!id || !['students','applications','interviews','offers','tasks'].includes(resource)) return;
+    if (busyId) return; // avoid duplicate requests
+
+    const label = SCHEMA[resource].singular.toLowerCase();
+    if (!window.confirm(`Permanently delete this ${label}? This cannot be undone.`)) return;
+
+    setBusyId(id);
+    try {
+      // Do not remove from the UI unless the API confirms deletion.
+      await deleteRecord(resource, id);
+      setToast(`${SCHEMA[resource].singular} deleted successfully.`);
+      await reload(true);
+    } catch (error) {
+      setToast(`Could not delete ${label}: ${error.message || 'Unknown error'}`);
+    } finally {
+      setBusyId('');
+    }
+  }
+
+  async function toggleTask(item) {
+    const id = item.taskId;
+    setBusyId(id);
+    try {
+      await saveRecord('tasks', { ...item, taskStatus:isDone(item) ? 'Pending' : 'Completed' }, id);
+      setToast(`Task marked ${isDone(item) ? 'pending' : 'complete'}.`);
+      await reload(true);
+    } catch(err) { setToast(`Unable to update task: ${err.message}`); }
+    finally { setBusyId(''); }
+  }
+
+  const studentName = (id) => studentMap.get(id)?.name || 'Unknown student';
+  const activeResource = MENU.find(x => x.id === screen);
+  const coreConnected = availability.students && availability.applications;
+  const totalConnected = Object.values(availability).filter(Boolean).length;
+
+  const resourceProps = (resource) => ({
+    records: filtered[resource] || [], students, applications, appMap, studentMap,
+    studentName, search, setSearch, onAdd:openEditor, onEdit:openEditor,
+    onDelete:remove, onToggleTask:toggleTask,
+    loading, available:availability[resource], busyId, selectedStudent
+  });
+
+  return <div className="app-shell">
+    <aside className={`sidebar ${drawerOpen ? 'sidebar-open' : ''}`}>
+      <div className="brand">
+        <div className="brand-mark"><GraduationCap size={25} strokeWidth={2.25}/></div>
+        <div><strong>Placement<span>Hub</span></strong><small>STUDENT SUCCESS PLATFORM</small></div>
+        <button className="mobile-nav-close" aria-label="Close navigation" onClick={()=>setDrawerOpen(false)}><X size={20}/></button>
+      </div>
+      <div className="sidebar-caption">WORKSPACE</div>
+      <nav className="side-links" aria-label="Main navigation">
+        {MENU.map(({ id, title, icon:Icon }) => <button key={id} className={`side-link ${screen === id ? 'side-link-active' : ''}`} onClick={()=>navigate(id)}>
+          <Icon size={19} strokeWidth={screen === id ? 2.35 : 1.9}/><span>{title}</span>
+          {id === 'tasks' && filtered.tasks.filter(t=>!isDone(t)).length > 0 && <span className="nav-count">{filtered.tasks.filter(t=>!isDone(t)).length}</span>}
+        </button>)}
+      </nav>
+      <div className="sidebar-foot">
+        <div className="help-box"><div className="help-glow"><Sparkles size={18}/></div><strong>Stay on track</strong><p>Keep your applications, interviews, and deadlines organized.</p><button onClick={()=>navigate('tasks')}>View my tasks <ArrowRight size={14}/></button></div>
+        <div className="sidebar-user"><div className="side-avatar">ST</div><div><strong>Placement workspace</strong><small>Local project environment</small></div><ChevronDown size={15}/></div>
+      </div>
+    </aside>
+    {drawerOpen && <div className="mobile-scrim" onClick={()=>setDrawerOpen(false)}/>}
+
+    <main className="main-area">
+      <header className="topbar">
+        <div className="topbar-left"><button className="mobile-toggle" aria-label="Open menu" onClick={()=>setDrawerOpen(true)}><Menu size={23}/></button><span className="crumb-home">Workspace</span><ChevronRight size={14}/><strong>{activeResource?.title}</strong></div>
+        <div className="topbar-right">
+          <label className="student-filter"><Users size={16}/><select aria-label="Filter records by student" value={selectedStudent} onChange={e=>setSelectedStudent(e.target.value)}><option value="">All students</option>{students.map(s=><option key={s.studentId} value={s.studentId}>{s.name || s.studentId}</option>)}</select><ChevronDown size={15}/></label>
+          <button className="toolbar-refresh" title="Refresh records" aria-label="Refresh records" disabled={refreshing} onClick={()=>reload(true)}><RefreshCw size={19} className={refreshing ? 'spin' : ''}/></button>
+          <span className={`connection-indicator ${coreConnected ? 'is-connected' : ''}`} title={`${totalConnected} of 5 API collections loaded`}><span/>{coreConnected ? 'Connected' : 'API unavailable'}</span>
+          <div className="topbar-avatar">ST</div>
+        </div>
+      </header>
+
+      <div className="content-area">
+        {!loading && !coreConnected && <div className="connection-banner"><AlertCircle size={19}/><div><strong>Express backend not fully connected.</strong><span>Start DynamoDB Local and Express on port 5000, then refresh. This frontend never substitutes fake data.</span></div><button onClick={()=>reload(true)} disabled={refreshing}>Retry</button></div>}
+        {!loading && coreConnected && errors.length > 0 && <div className="connection-banner partial-banner"><AlertCircle size={18}/><div><strong>Some API collections are unavailable.</strong><span>{errors.join(' · ')}</span></div><button onClick={()=>reload(true)}>Retry</button></div>}
+        <Routes>
+          <Route path="/" element={<Dashboard data={filtered} students={students} appMap={appMap} studentName={studentName} selectedStudent={selectedStudent} loading={loading} onNavigate={navigate} onAdd={openEditor} onTaskToggle={toggleTask} busyId={busyId}/>} />
+          <Route path="/students" element={<StudentsPage {...resourceProps('students')} />} />
+          <Route path="/applications" element={<ApplicationsPage {...resourceProps('applications')} />} />
+          <Route path="/interviews" element={<InterviewsPage {...resourceProps('interviews')} />} />
+          <Route path="/offers" element={<OffersPage {...resourceProps('offers')} />} />
+          <Route path="/tasks" element={<TasksPage {...resourceProps('tasks')} />} />
+          <Route path="*" element={<Navigate to="/" replace />} />
+        </Routes>
+        <footer className="footer"><span>PlacementHub · Student Placement Tracker</span><span>React + Express + DynamoDB Local</span></footer>
+      </div>
+    </main>
+
+    {editor && <Modal title={`${editor.original ? 'Edit' : 'Add'} ${SCHEMA[editor.resource].singular}`} subtitle={editor.original ? 'Update the record in DynamoDB Local.' : 'This record will be saved through your Express API.'} onClose={()=>!saving && setEditor(null)} width="620px">
+      <form className="editor-form" onSubmit={submitEditor}>
+        <div className="form-grid">{SCHEMA[editor.resource].fields.map(field => <Field key={field.name} field={field} value={editor.value[field.name] ?? ''} data={editor.value} resource={editor.resource} students={students} applications={applications} onChange={v=>setEditor(prev=>({ ...prev, value:{ ...prev.value, [field.name]:v } }))} disabled={saving || (Boolean(editor.original) && ['studentId','applicationId'].includes(field.name))}/>)}</div>
+        {modalError && <InlineError message={modalError}/>}
+        {((editor.resource === 'applications' || editor.resource === 'tasks') && !students.length) && <p className="form-hint">Create a student first on the Students page.</p>}
+        <div className="modal-actions"><button type="button" className="btn btn-secondary" disabled={saving} onClick={()=>setEditor(null)}>Cancel</button><button type="submit" className="btn btn-primary" disabled={saving}>{saving ? <span className="saving-indicator"/> : <Check size={17}/>} {saving ? 'Saving...' : editor.original ? 'Save changes' : 'Create record'}</button></div>
+      </form>
+    </Modal>}
+
+    {toast && <SuccessToast message={toast} onClose={()=>setToast('')}/>}
+  </div>;
+}
+
