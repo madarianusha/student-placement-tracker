@@ -108,20 +108,36 @@ export default function App() {
     } finally { setSaving(false); }
   }
 
-  // DELETE -- shared handler for Students, Applications, Interviews, Offers and Tasks.
+  // Shared DELETE handler. ResourcePage already confirms student cascade deletion.
   async function remove(resource, item) {
     const id = item[KEYS[resource]];
-    if (!id || !['students','applications','interviews','offers','tasks'].includes(resource)) return;
-    if (busyId) return; // avoid duplicate requests
+    if (!id || !['students', 'applications', 'interviews', 'offers', 'tasks'].includes(resource)) return;
+    if (busyId) return; // Avoid duplicate requests.
 
     const label = SCHEMA[resource].singular.toLowerCase();
-    if (!window.confirm(`Permanently delete this ${label}? This cannot be undone.`)) return;
+
+    // Students get their detailed confirmation in ResourcePage.jsx.
+    // Keep the original confirmation for all other resource types.
+    if (resource !== 'students' &&
+        !window.confirm(`Permanently delete this ${label}? This cannot be undone.`)) {
+      return;
+    }
 
     setBusyId(id);
     try {
-      // Do not remove from the UI unless the API confirms deletion.
-      await deleteRecord(resource, id);
-      setToast(`${SCHEMA[resource].singular} deleted successfully.`);
+      // The api.js helper must add ?confirm=DELETE for confirmed student deletions.
+      await deleteRecord(resource, id, { confirmCascade: resource === 'students' });
+
+      // Clear the global student filter if the selected student was deleted.
+      if (resource === 'students') {
+        setSelectedStudent(previous => previous === id ? '' : previous);
+      }
+
+      setToast(resource === 'students'
+        ? 'Student and all linked records deleted successfully.'
+        : `${SCHEMA[resource].singular} deleted successfully.`);
+
+      // Refresh every collection: students, applications, interviews, offers and tasks.
       await reload(true);
     } catch (error) {
       setToast(`Could not delete ${label}: ${error.message || 'Unknown error'}`);

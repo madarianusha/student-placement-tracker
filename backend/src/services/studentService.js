@@ -2,232 +2,313 @@
 const { randomUUID } = require("crypto");
 
 const {
+  DescribeTableCommand
+} = require("@aws-sdk/client-dynamodb");
+
+const {
   DynamoDBDocumentClient,
   GetCommand,
   PutCommand,
   ScanCommand,
-  DeleteCommand,
-  QueryCommand
+  TransactWriteCommand
 } = require("@aws-sdk/lib-dynamodb");
 
 const { client } = require("../config/db");
 
-const dynamoDB = DynamoDBDocumentClient.from(client);
+const db = DynamoDBDocumentClient.from(client);
 
-const TABLE_NAME = "Students";
+const STUDENTS_TABLE = "Students";
 
-// GET ALL STUDENTS
+const RELATED_TABLES = [
+  "ApplicationActivity",
+  "Interviews",
+  "Offers",
+  "Tasks"
+];
+
+// GET all students
 async function getAllStudents() {
   const students = [];
   let lastKey;
 
   do {
-    const result = await dynamoDB.send(
+    const result = await db.send(
       new ScanCommand({
-        TableName: TABLE_NAME,
+        TableName: STUDENTS_TABLE,
         ExclusiveStartKey: lastKey
       })
     );
 
     students.push(...(result.Items || []));
     lastKey = result.LastEvaluatedKey;
-
   } while (lastKey);
 
   return students;
 }
 
-// GET STUDENT BY ID
-async function getStudentById(id) {
-  const result = await dynamoDB.send(
+// GET student by ID
+async function getStudentById(studentId) {
+  const result = await db.send(
     new GetCommand({
-      TableName: TABLE_NAME,
-      Key: { studentId: id }
+      TableName: STUDENTS_TABLE,
+      Key: { studentId }
     })
   );
 
   return result.Item || null;
 }
 
-// CREATE STUDENT
+// CREATE student
 async function createStudent(data) {
   const student = {
-    studentId: randomUUID(),
-    ...data
+    ...data,
+    studentId: randomUUID()
   };
 
-  await dynamoDB.send(
+  await db.send(
     new PutCommand({
-      TableName: TABLE_NAME,
-      Item: student,
-      ConditionExpression:
-        "attribute_not_exists(studentId)"
+      TableName: STUDENTS_TABLE,
+      Item: student
     })
   );
 
   return student;
 }
 
-// UPDATE STUDENT
-async function updateStudent(id, data) {
-  const student = await getStudentById(id);
+// UPDATE student
+async function updateStudent(studentId, updates) {
+  const student = await getStudentById(studentId);
 
-  if (!student) return null;
+  if (!student) {
+    return null;
+  }
 
-  const allowed = [
+  const allowedFields = [
     "name",
     "email",
     "major",
     "graduationYear"
   ];
 
-  for (const field of allowed) {
-    if (
-      Object.prototype.hasOwnProperty.call(data, field)
-    ) {
-      student[field] = data[field];
+  const updatedStudent = { ...student };
+
+  for (const field of allowedFields) {
+    if (updates[field] !== undefined) {
+      updatedStudent[field] = updates[field];
     }
   }
 
-  await dynamoDB.send(
+  await db.send(
     new PutCommand({
-      TableName: TABLE_NAME,
-      Item: student,
-      ConditionExpression:
-        "attribute_exists(studentId)"
+      TableName: STUDENTS_TABLE,
+      Item: updatedStudent
     })
   );
 
-  return student;
+  return updatedStudent;
 }
 
-// CHECK FOR RELATED RECORDS
-
-async function hasLinkedRecords(tableName, studentId) {
+// Scan all pages and return matching records
+async function scanMatching(tableName, matches) {
+  const records = [];
   let lastKey;
 
   do {
-    const result = await dynamoDB.send(
+    const result = await db.send(
       new ScanCommand({
         TableName: tableName,
         ConsistentRead: true,
-        FilterExpression: "#sid = :studentId",
-        ExpressionAttributeNames: {
-          "#sid": "studentId"
-        },
-        ExpressionAttributeValues: {
-          ":studentId": studentId
-        },
-        ProjectionExpression: "#sid",
         ExclusiveStartKey: lastKey
       })
     );
 
-    // Found a related record
-    if (result.Items && result.Items.length > 0) {
-      return true;
+    for (const item of result.Items || []) {
+      if (matches(item)) {
+        records.push(item);
+      }
     }
 
     lastKey = result.LastEvaluatedKey;
-
   } while (lastKey);
 
-  // No related records found
-  return false;
+  return records;
 }
 
+// Read the actual primary key of a table
+async function getTableKeyNames(tableName) {
+  const result = await client.send(
+    new DescribeTableCommand({
+      TableName: tableName
+    })
+  );
 
-// DELETE STUDENT
+  const keyNames = result.Table.KeySchema.map(
+    key => key.AttributeName
+  );
 
-async function deleteStudent(id) {
-  const student = await getStudentById(id);
+  return keyNames;
+}
+
+// Build one safe transaction delete operation
+async function buildDeleteOperation(
+  tableName,
+  item,
+  studentId
+) {
+  const keyNames = await getTableKeyNames(tableName);
+
+  const Key = {};
+
+  for (const name of keyNames) {
+    if (item[name] === undefined) {
+      throw new Error(
+        `Missing primary key ${name} in ${tableName}`
+      );
+    }
+
+    Key[name] = item[name];
+  }
+
+  const names = {
+    "#pk": keyNames[0]
+  };
+
+  let condition = "attribute_exists(#pk)";
+  const values = {};
+
+  // Verify a related record still belongs
+  // to the student or one of their applications
+  if (tableName !== STUDENTS_TABLE) {
+    if (item.studentId === studentId) {
+      names["#relation"] = "studentId";
+      values[":relation"] = studentId;
+    } else if (item.applicationId !== undefined) {
+      names["#relation"] = "applicationId";
+      values[":relation"] = item.applicationId;
+    }
+
+    if (names["#relation"]) {
+      condition += " AND #relation = :relation";
+    }
+  }
+
+  const Delete = {
+    TableName: tableName,
+    Key,
+    ConditionExpression: condition,
+    ExpressionAttributeNames: names
+  };
+
+  if (Object.keys(values).length > 0) {
+    Delete.ExpressionAttributeValues = values;
+  }
+
+  return { Delete };
+}
+
+// DELETE student and all linked records
+async function deleteStudent(studentId) {
+  const student = await getStudentById(studentId);
 
   if (!student) {
     return false;
   }
 
-  // Check applications and tasks
-  const [hasApplications, hasTasks] = await Promise.all([
-    hasLinkedRecords("JobApplications", id),
-    hasLinkedRecords("Tasks", id)
-  ]);
+  // Find the student's applications
+  const applications = await scanMatching(
+    "JobApplications",
+    item => item.studentId === studentId
+  );
 
-  // Temporary log for testing
-  console.log("Student deletion check:", {
-    studentId: id,
-    hasApplications,
-    hasTasks
-  });
+  const applicationIds = new Set(
+    applications
+      .map(item => item.applicationId)
+      .filter(id => id !== undefined && id !== null)
+  );
 
-  // Stop deletion if related records exist
-  if (hasApplications || hasTasks) {
-    const error = new Error(
-      "Cannot delete student. Delete linked applications and tasks first."
+  // Match by studentId OR linked applicationId
+  const matchesStudent = item =>
+    item.studentId === studentId ||
+    (
+      item.applicationId !== undefined &&
+      applicationIds.has(item.applicationId)
     );
 
-    error.code = "STUDENT_HAS_LINKED_RECORDS";
-    throw error;
+  const related = {};
+
+  for (const tableName of RELATED_TABLES) {
+    related[tableName] = await scanMatching(
+      tableName,
+      matchesStudent
+    );
   }
 
-  // Delete only if no related records exist
-  try {
-    await dynamoDB.send(
-      new DeleteCommand({
-        TableName: TABLE_NAME,
-        Key: { studentId: id },
-        ConditionExpression:
-          "attribute_exists(studentId)"
-      })
-    );
-  } catch (error) {
-    if (error.name === "ConditionalCheckFailedException") {
-      return false;
+  // Gather every record to delete
+  const records = [
+    ...applications.map(item => ({
+      tableName: "JobApplications",
+      item
+    })),
+
+    ...RELATED_TABLES.flatMap(tableName =>
+      related[tableName].map(item => ({
+        tableName,
+        item
+      }))
+    ),
+
+    {
+      tableName: STUDENTS_TABLE,
+      item: student
     }
+  ];
 
-    throw error;
-  }
-
-  return true;
-}
-
-
-  // Check related applications and tasks
-  const [hasApplications, hasTasks] =
-    await Promise.all([
-      hasLinkedRecords("JobApplications", id),
-      hasLinkedRecords("Tasks", id)
-    ]);
-
-  // Prevent deletion when linked records exist
-  if (hasApplications || hasTasks) {
+  // DynamoDB transactions support at most
+  // 100 actions in a single transaction.
+  // Refuse rather than partially delete.
+  if (records.length > 100) {
     const error = new Error(
-      "Cannot delete student. Delete linked applications and tasks first."
+      "Student has too many linked records for " +
+      "one atomic deletion. No records were deleted."
     );
 
-    error.code = "STUDENT_HAS_LINKED_RECORDS";
-
+    error.code = "CASCADE_LIMIT_EXCEEDED";
+    error.status = 409;
     throw error;
   }
 
-  // Delete student when no linked records exist
-  try {
-    await dynamoDB.send(
-      new DeleteCommand({
-        TableName: TABLE_NAME,
-        Key: { studentId: id },
-        ConditionExpression:
-          "attribute_exists(studentId)"
-      })
+  // Prepare all deletion operations first
+  const operations = [];
+
+  for (const record of records) {
+    operations.push(
+      await buildDeleteOperation(
+        record.tableName,
+        record.item,
+        studentId
+      )
     );
-  } catch (error) {
-    if (error.name === "ConditionalCheckFailedException") {
-      return false;
+  }
+
+  // All-or-nothing database deletion
+  await db.send(
+    new TransactWriteCommand({
+      TransactItems: operations
+    })
+  );
+
+  return {
+    deleted: true,
+    studentId,
+    deletedRecords: {
+      applications: applications.length,
+      activity: related.ApplicationActivity.length,
+      interviews: related.Interviews.length,
+      offers: related.Offers.length,
+      tasks: related.Tasks.length,
+      students: 1
     }
-
-    throw error;
-  }
-
-  return true;
+  };
 }
 
 module.exports = {

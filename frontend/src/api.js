@@ -46,7 +46,44 @@ export async function saveRecord(resource, record, id) {
   });
 }
 
+
+
 export async function deleteRecord(resource, id) {
-  return api(`/${resource}/${encodeURIComponent(id)}`, { method: 'DELETE' });
+  const BASE = (
+    import.meta.env.VITE_API_URL ||
+    "http://localhost:5000/api"
+  ).replace(/\/$/, "");
+
+  const query =
+    resource === "students"
+      ? "?confirm=DELETE"
+      : "";
+
+  const url =
+    `${BASE}/${resource}/${encodeURIComponent(id)}${query}`;
+
+  const response = await fetch(url, {
+    method: "DELETE"
+  });
+
+  const text = await response.text();
+
+  let data;
+
+  try {
+    data = text ? JSON.parse(text) : null;
+  } catch {
+    data = null;
+  }
+
+  if (!response.ok) {
+    throw new Error(
+      data?.message ||
+      `Delete failed (HTTP ${response.status})`
+    );
+  }
+
+  return data;
 }
+
 

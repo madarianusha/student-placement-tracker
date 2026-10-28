@@ -75,6 +75,7 @@ exports.create = async (req, res) => {
       });
     }
 
+    // Check if application exists
     const application =
       await applicationService.getApplicationById(applicationId);
 
@@ -84,6 +85,7 @@ exports.create = async (req, res) => {
       });
     }
 
+    // Create interview
     const interview = await service.createInterview({
       applicationId,
       interviewDate,
@@ -91,9 +93,21 @@ exports.create = async (req, res) => {
       notes
     });
 
+    // NEW: Automatically update application status
+    if (
+      ["Applied", "Screening"].includes(application.status)
+    ) {
+      await applicationService.updateApplication(
+        applicationId,
+        { status: "Interview" }
+      );
+    }
+
     res.status(201).json(interview);
+
   } catch (error) {
-    console.error(error);
+    console.error("Create interview error:", error);
+
     res.status(500).json({
       message: "Failed to create interview"
     });
@@ -103,8 +117,11 @@ exports.create = async (req, res) => {
 // UPDATE INTERVIEW
 exports.update = async (req, res) => {
   try {
-    const { interviewStatus, interviewType, interviewDate } =
-      req.body;
+    const {
+      interviewStatus,
+      interviewType,
+      interviewDate
+    } = req.body;
 
     if (
       interviewStatus !== undefined &&
@@ -126,8 +143,10 @@ exports.update = async (req, res) => {
 
     if (
       interviewDate !== undefined &&
-      (typeof interviewDate !== "string" ||
-       !Number.isFinite(Date.parse(interviewDate)))
+      (
+        typeof interviewDate !== "string" ||
+        !Number.isFinite(Date.parse(interviewDate))
+      )
     ) {
       return res.status(400).json({
         message: "Invalid interview date"
@@ -146,8 +165,10 @@ exports.update = async (req, res) => {
     }
 
     res.json(interview);
+
   } catch (error) {
     console.error(error);
+
     res.status(500).json({
       message: "Failed to update interview"
     });
@@ -157,7 +178,9 @@ exports.update = async (req, res) => {
 // DELETE INTERVIEW
 exports.remove = async (req, res) => {
   try {
-    const deleted = await service.deleteInterview(req.params.id);
+    const deleted = await service.deleteInterview(
+      req.params.id
+    );
 
     if (!deleted) {
       return res.status(404).json({
@@ -168,8 +191,10 @@ exports.remove = async (req, res) => {
     res.json({
       message: "Interview deleted successfully"
     });
+
   } catch (error) {
     console.error(error);
+
     res.status(500).json({
       message: "Failed to delete interview"
     });

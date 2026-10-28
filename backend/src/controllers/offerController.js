@@ -4,7 +4,7 @@ const applicationService = require("../services/applicationService");
 
 const validStatuses = ["Pending", "Accepted", "Declined"];
 
-// Validate and convert salary to a number
+// Validate salary
 function parseSalary(salary) {
   if (
     typeof salary !== "number" &&
@@ -26,11 +26,28 @@ function parseSalary(salary) {
   return amount;
 }
 
-// Validate date format
+// Validate date
 function validDate(date) {
   return typeof date === "string" &&
     /^\d{4}-\d{2}-\d{2}$/.test(date) &&
     !Number.isNaN(Date.parse(date));
+}
+
+// Automatically update application status to Offer
+async function updateApplicationToOffer(applicationId) {
+  const application =
+    await applicationService.getApplicationById(applicationId);
+
+  if (!application) {
+    throw new Error("Linked application not found");
+  }
+
+  if (application.status !== "Offer") {
+    await applicationService.updateApplication(
+      applicationId,
+      { status: "Offer" }
+    );
+  }
 }
 
 // GET ALL OFFERS
@@ -43,6 +60,7 @@ exports.getAll = async (req, res) => {
     res.json(offers);
   } catch (error) {
     console.error(error);
+
     res.status(500).json({
       message: "Failed to fetch offers"
     });
@@ -52,7 +70,9 @@ exports.getAll = async (req, res) => {
 // GET OFFER BY ID
 exports.getById = async (req, res) => {
   try {
-    const offer = await service.getOfferById(req.params.id);
+    const offer = await service.getOfferById(
+      req.params.id
+    );
 
     if (!offer) {
       return res.status(404).json({
@@ -63,6 +83,7 @@ exports.getById = async (req, res) => {
     res.json(offer);
   } catch (error) {
     console.error(error);
+
     res.status(500).json({
       message: "Failed to fetch offer"
     });
@@ -80,7 +101,7 @@ exports.create = async (req, res) => {
       offerStatus = "Pending"
     } = req.body;
 
-    // Check required fields
+    // Validate required fields
     if (
       !applicationId ||
       !offerDate ||
@@ -113,14 +134,14 @@ exports.create = async (req, res) => {
       });
     }
 
-    // Validate offer status
+    // Validate status
     if (!validStatuses.includes(offerStatus)) {
       return res.status(400).json({
         message: "Invalid offer status"
       });
     }
 
-    // Check application exists
+    // Verify application exists
     const application =
       await applicationService.getApplicationById(
         applicationId
@@ -141,13 +162,16 @@ exports.create = async (req, res) => {
       offerStatus
     });
 
+    // NEW: Automatically update application status
+    await updateApplicationToOffer(applicationId);
+
     res.status(201).json(offer);
 
   } catch (error) {
     console.error("Create offer error:", error);
 
     res.status(500).json({
-      message: "Failed to create offer"
+      message: "Failed to create offer or update application status"
     });
   }
 };
@@ -172,10 +196,9 @@ exports.update = async (req, res) => {
       });
     }
 
-    // Prepare update data
     const updateData = { ...req.body };
 
-    // Validate salary if provided
+    // Validate salary
     if (salary !== undefined) {
       const parsedSalary = parseSalary(salary);
 
@@ -188,7 +211,7 @@ exports.update = async (req, res) => {
       updateData.salary = parsedSalary;
     }
 
-    // Validate dates if provided
+    // Validate dates
     if (
       (offerDate !== undefined &&
         !validDate(offerDate)) ||
@@ -212,13 +235,18 @@ exports.update = async (req, res) => {
       });
     }
 
+    // NEW: Synchronize application status
+    await updateApplicationToOffer(
+      offer.applicationId
+    );
+
     res.json(offer);
 
   } catch (error) {
     console.error("Update offer error:", error);
 
     res.status(500).json({
-      message: "Failed to update offer"
+      message: "Failed to update offer or application status"
     });
   }
 };

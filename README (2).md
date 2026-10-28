@@ -1,481 +1,393 @@
 # Student Placement Tracker
 
-## About the project
+**PlacementHub — a full-stack placement management application built with React, Express, and DynamoDB Local.**
 
-We developed Student Placement Tracker for our NoSQL course project. The main idea was to keep student placement information in one application instead of managing job applications, interviews, offers, and reminders in different places.
+![React](https://img.shields.io/badge/Frontend-React-149ECA?logo=react&logoColor=white)
+![Express](https://img.shields.io/badge/Backend-Express-333333?logo=express&logoColor=white)
+![DynamoDB Local](https://img.shields.io/badge/Database-DynamoDB%20Local-4053D6?logo=amazondynamodb&logoColor=white)
+![Docker](https://img.shields.io/badge/Environment-Docker-2496ED?logo=docker&logoColor=white)
 
-The frontend is built using React, the backend uses Node.js and Express, and the data is stored in DynamoDB Local. We use Docker Desktop to run DynamoDB on our computers. The application is meant to run locally for our course demonstration.
+Student Placement Tracker centralizes student profiles, job applications, interviews, offers, and placement tasks in a single interface. It was developed as an academic NoSQL application to demonstrate NoSQL data modeling, RESTful API design, record relationships, and end-to-end integration between a React client and a DynamoDB database.
 
-### Features
-
-- **Students:** Add, view, edit, and delete student profiles.
-- **Job applications:** Record the company, job title, location, date applied, and application status.
-- **Interviews:** Save interview dates, types, statuses, and notes.
-- **Offers:** Save salary, offer date, response deadline, and offer decision.
-- **Tasks:** Track tasks and deadlines. A task can be created with or without a related application.
-- **Dashboard:** View counts and placement information, with student filtering.
-- **Application history:** Record changes made to an application's status.
-
-The application also supports searching and filtering records.
-
-## Technologies used
-
-| Part | Technology |
-| --- | --- |
-| Frontend | React, Vite, React Router, JavaScript, CSS |
-| Backend | Node.js, Express.js, REST APIs |
-| Database | Amazon DynamoDB Local |
-| Database connection | AWS SDK for JavaScript v3 |
-| Database container | Docker Desktop and Docker Compose |
-| Development | VS Code, Git, GitHub |
-
-## Project structure
-
-```text
-student-placement-tracker/
-├── backend/                 # Express server, routes, controllers, services
-├── database/                # DynamoDB setup and test scripts
-├── frontend/                # React application
-├── docs/                    # Project documents
-├── presentation/            # Presentation materials
-├── docker-compose.yml       # DynamoDB Local Docker configuration
-├── .gitignore
-└── README.md                # Main project documentation
-```
-
-This is the only README needed in the repository. Database setup instructions are included below.
+**Project:** Academic NoSQL application  
+**Repository:** [github.com/madarianusha/student-placement-tracker](https://github.com/madarianusha/student-placement-tracker)  
+**Deployment:** Local development and demonstration
 
 ---
 
-# Complete installation and setup (Windows)
+## Contents
 
-These are the steps we follow to set up the project on a new Windows computer. Use **PowerShell** or the **VS Code terminal** for the commands.
+- [Overview](#overview)
+- [Key features](#key-features)
+- [Technology stack](#technology-stack)
+- [System architecture](#system-architecture)
+- [Data model](#data-model)
+- [Getting started](#getting-started)
+- [Application workflow](#application-workflow)
+- [API reference](#api-reference)
+- [Testing](#testing)
+- [Project structure](#project-structure)
+- [Troubleshooting](#troubleshooting)
+- [Scope and limitations](#scope-and-limitations)
 
-## Step 1 — Install the required software
+## Overview
 
-Install the following applications if they are not already on your computer:
+Managing student placement information across spreadsheets and separate records can make it difficult to track applications, interviews, offers, and outstanding tasks consistently. PlacementHub provides one workspace in which these records can be created, updated, searched, and related to one another.
 
-1. **Git:** https://git-scm.com/downloads
-   - Download Git for Windows and run the installer. The default installation options are fine for this project.
-2. **Node.js:** https://nodejs.org/
-   - Install a current **LTS** version of Node.js. npm is installed along with Node.js.
-3. **Docker Desktop:** https://www.docker.com/products/docker-desktop/
-   - Install Docker Desktop for Windows.
-   - If Docker requests WSL 2 or Windows virtualization support, enable it as instructed by Docker. On a supported Windows system, `wsl --install` can be run in an Administrator PowerShell terminal if WSL is not installed. Restart Windows if the installation asks you to.
-   - Start Docker Desktop and wait until the Docker engine is running.
-4. **Visual Studio Code (recommended):** https://code.visualstudio.com/
-   - Install VS Code to view and edit the project files.
+The application uses a **three-tier architecture**: a React frontend presents the user interface; an Express server validates requests and implements business rules; and DynamoDB Local stores the data. The database runs in Docker, so the project can be demonstrated without provisioning an AWS-hosted DynamoDB service.
 
-Open a new PowerShell terminal and check the installations:
+### Project objectives
 
-```powershell
-git --version
-node --version
-npm --version
-docker --version
-docker compose version
+- Centralize student placement data in one application.
+- Model relationships between students, applications, interviews, offers, and tasks in a NoSQL database.
+- Provide CRUD operations through a consistent REST API.
+- Track the progression of an application while retaining interview and offer records separately.
+- Support record validation, status history, and controlled deletion of related data.
+- Present summary metrics and searchable records in a responsive dashboard.
+
+## Key features
+
+| Module | Functionality |
+| --- | --- |
+| **Dashboard** | Application summary, in-progress applications, upcoming interviews, offers received, and recent activity views. |
+| **Students** | Create, view, edit, search, and delete student profiles. |
+| **Applications** | Record company, position, location, application date, and application stage; search and filter by status. |
+| **Interviews** | Schedule interviews, maintain interview type and date, update status, and save notes. |
+| **Offers** | Record salary, offer date, decision deadline, and offer decision. |
+| **Tasks** | Add student-related tasks, optionally associate them with an application, assign priorities and deadlines, and track completion. |
+| **Status history** | Retain application status changes in a separate activity table. |
+| **Record relationships** | Validate linked records and handle student deletion with related-data cleanup. |
+
+### Supported status values
+
+| Record type | Values |
+| --- | --- |
+| Application | `Applied`, `Screening`, `Interview`, `Offer`, `Rejected`, `Withdrawn` |
+| Interview | `Scheduled`, `Completed`, `Cancelled` |
+| Offer decision | `Pending`, `Accepted`, `Declined` |
+| Task | `Pending`, `In Progress`, `Completed` |
+| Task priority | `Low`, `Medium`, `High` |
+
+## Technology stack
+
+| Layer | Technologies |
+| --- | --- |
+| Frontend | React, Vite, React Router, JavaScript, CSS, Lucide React |
+| Backend | Node.js, Express.js, REST APIs |
+| Database | Amazon DynamoDB Local |
+| Database integration | AWS SDK for JavaScript v3 |
+| Local infrastructure | Docker Desktop, Docker Compose |
+| Development tools | Visual Studio Code, Git, GitHub |
+
+## System architecture
+
+```text
+┌─────────────────────────────────────────┐
+│ React + Vite                            │
+│ Dashboard · Students · Applications     │
+│ Interviews · Offers · Tasks             │
+│ http://localhost:5173                   │
+└──────────────────┬──────────────────────┘
+                   │ HTTP / JSON
+                   ▼
+┌─────────────────────────────────────────┐
+│ Node.js + Express                       │
+│ Routes → Controllers → Services         │
+│ Validation · Business rules · REST API  │
+│ http://localhost:5000/api               │
+└──────────────────┬──────────────────────┘
+                   │ AWS SDK v3
+                   ▼
+┌─────────────────────────────────────────┐
+│ DynamoDB Local (Docker)                 │
+│ Host endpoint: http://localhost:8002    │
+│                                         │
+│ Students          JobApplications       │
+│ Interviews        Offers                │
+│ Tasks             ApplicationActivity   │
+└─────────────────────────────────────────┘
 ```
 
-If all commands return version information, the required tools are installed. If Docker reports that its daemon cannot be reached, open Docker Desktop and make sure it has finished starting.
+The browser communicates with the Express API; database operations are performed by backend services rather than directly from React.
 
-**PowerShell note:** If Windows blocks `npm.ps1`, use `npm.cmd` instead of `npm` in the commands below. This avoids changing your PowerShell execution policy.
+## Data model
 
-## Step 2 — Download the project from GitHub
+DynamoDB Local stores six tables. Related records use identifiers rather than SQL foreign keys; the backend is responsible for checking those relationships.
 
-Open PowerShell in the directory where you want to keep the project. Clone the repository:
+| Table | Primary key | Purpose | Secondary index(es) |
+| --- | --- | --- | --- |
+| `Students` | `studentId` | Student profile information | — |
+| `JobApplications` | `applicationId` | Job applications belonging to students | `studentId-index` |
+| `Interviews` | `interviewId` | Interview records linked to applications | `applicationId-index` |
+| `Offers` | `offerId` | Offers linked to applications | `applicationId-index` |
+| `Tasks` | `taskId` | Student tasks, optionally linked to applications | `studentId-index`, `applicationId-index` |
+| `ApplicationActivity` | `activityId` | Application status-change history | `applicationId-index` |
+
+### Record relationships
+
+```text
+Student (studentId)
+├── Job Application (applicationId, studentId)
+│   ├── Interviews (applicationId)
+│   ├── Offers (applicationId)
+│   ├── Application activity (applicationId)
+│   └── Tasks (optional applicationId)
+└── Tasks (studentId)
+```
+
+**Deletion policy:** Deleting a student requires explicit confirmation and is designed to delete its linked applications, interviews, offers, tasks, and application history. The backend uses a DynamoDB transaction for up to **100 records in one delete operation**, including the student, and rejects larger deletions rather than attempting a partial transaction. This is a permanent operation; test it using disposable data.
+
+## Getting started
+
+### Prerequisites
+
+Install the following before running the project:
+
+- **Node.js** (current LTS) and npm
+- **Docker Desktop**, with the Docker engine running
+- **Git**
+- **Visual Studio Code** or another editor (optional)
+
+The instructions below use a PowerShell or VS Code terminal on Windows. Run commands from the stated directory.
+
+### 1. Clone the repository
 
 ```powershell
 git clone https://github.com/madarianusha/student-placement-tracker.git
 cd student-placement-tracker
 ```
 
-If you already downloaded the repository, open its folder in VS Code instead of cloning it again.
+### 2. Start DynamoDB Local
 
-Check that you are in the main project folder:
-
-```powershell
-Get-ChildItem
-```
-
-You should see `backend`, `frontend`, `database`, and `docker-compose.yml`.
-
-To open the project in VS Code from the terminal, run:
-
-```powershell
-code .
-```
-
-If `code` is not recognized, open VS Code and select **File > Open Folder**, then choose `student-placement-tracker`.
-
-## Step 3 — Start Docker Desktop and DynamoDB Local
-
-Keep Docker Desktop running. From the **main project folder**, first check for an existing database container:
-
-```powershell
-docker ps -a --filter "name=student-placement-db"
-```
-
-**On a new computer:** If no container named `student-placement-db` exists, create and start DynamoDB Local:
+From the repository root:
 
 ```powershell
 docker compose up -d
 ```
 
-**If the container already exists but is stopped:** Use:
+Check the container:
 
 ```powershell
-docker start student-placement-db
+docker ps
 ```
 
-**If it is already running:** You do not need to start another one.
+The project's local setup uses **port 8002 on the host**, mapped to DynamoDB's **port 8000 inside the container**. If a container named `student-placement-db` already exists outside this Compose project, inspect it with `docker ps -a` and start it with `docker start student-placement-db` instead of creating a duplicate. Avoid deleting Docker volumes to resolve a container-name conflict.
 
-Verify the running container:
+### 3. Initialize the database (first run only)
 
-```powershell
-docker ps --filter "name=student-placement-db"
-```
-
-Our `docker-compose.yml` maps port `8002` on Windows to port `8000` inside the container:
-
-```yaml
-ports:
-  - "127.0.0.1:8002:8000"
-```
-
-The endpoint to use from the backend on your computer is:
-
-```text
-http://localhost:8002
-```
-
-You can also check whether the port is reachable:
-
-```powershell
-Test-NetConnection localhost -Port 8002
-```
-
-The `TcpTestSucceeded` result should be `True` when DynamoDB Local is listening.
-
-**Important:** We previously encountered a Docker container-name conflict because `student-placement-db` was already running outside the current Compose project. If you see that error, check the existing container with `docker ps -a` instead of removing it. Do not run `docker compose down -v`, `docker volume prune`, or delete an existing database container unless its data has been backed up.
-
-## Step 4 — Install the database script dependencies
-
-Open another VS Code terminal. From the project root, move into the database folder:
+A fresh DynamoDB Local instance does **not** automatically contain the six application tables. From the `database/` directory, use the table-creation script provided in your checkout:
 
 ```powershell
 cd database
-Get-ChildItem
-```
-
-Check for `package.json` and the table-creation script. If `package.json` is present, install the dependencies:
-
-```powershell
-npm.cmd install
-```
-
-If there is no `package.json` in `database`, do not run `npm install` there. Use the dependencies and instructions associated with the scripts in that folder.
-
-## Step 5 — Create the DynamoDB tables (first-time setup only)
-
-This step is for a **new, empty DynamoDB Local database**. You do not need to recreate tables if the existing database already contains them.
-
-From inside the `database` folder, check that the setup script exists:
-
-```powershell
-Test-Path .\create-tables.js
-```
-
-If it returns `True`, run:
-
-```powershell
 node create-tables.js
+cd ..
 ```
 
-The database uses these six tables:
+> Check that `database/create-tables.js` exists before running this step. If the script is absent from your checkout, the tables and indexes listed in [Data model](#data-model) must be created before using the app. Skip initialization when all six tables already exist. Do not run optional sample-data scripts against records you want to preserve.
 
-| Table | Primary key |
-| --- | --- |
-| Students | `studentId` |
-| JobApplications | `applicationId` |
-| Interviews | `interviewId` |
-| Offers | `offerId` |
-| Tasks | `taskId` |
-| ApplicationActivity | `activityId` |
+### 4. Configure the backend
 
-All of these primary keys are strings.
-
-The secondary indexes used by the project are:
-
-| Table | Index |
-| --- | --- |
-| JobApplications | `studentId-index` |
-| Interviews | `applicationId-index` |
-| Offers | `applicationId-index` |
-| Tasks | `studentId-index`, `applicationId-index` |
-| ApplicationActivity | `applicationId-index` |
-
-If `create-tables.js` is missing, the repository does not contain the documented table-creation command at that path. Add or restore the database initialization script before trying to run the application with a completely fresh database; starting Docker alone does not create these tables.
-
-### Optional: Add sample records
-
-The database folder has been used with the following sample-data scripts:
-
-```powershell
-node add-student.js
-node add-application.js
-node update-application.js
-node add-related-data.js
-```
-
-Run only scripts that are actually present, and use them in this order on a test database if you want example records. They are **not required** if you plan to add students and applications through the frontend. Some scripts use fixed IDs and may overwrite sample data when run again.
-
-### Optional: Run database test scripts
-
-Previously used test commands include:
-
-```powershell
-node test-connection.js
-node read-application.js
-node query-applications.js
-node check-related-data.js
-```
-
-Again, run these only if the corresponding files exist. Review any delete-test script carefully before running it because it may remove records.
-
-## Step 6 — Configure the backend environment
-
-Open a terminal in the project root, then go to the backend folder:
-
-```powershell
-cd backend
-```
-
-Our connection configuration is in `backend/src/config/db.js`. It reads the `DYNAMODB_ENDPOINT` environment variable, or uses `http://localhost:8002` by default.
-
-If you want to set the values explicitly, create a file named `.env` **inside the `backend` folder** with the following contents:
+Create `backend/.env` if you need to set the local connection explicitly:
 
 ```dotenv
 PORT=5000
-AWS_REGION=us-east-1
 DYNAMODB_ENDPOINT=http://localhost:8002
+AWS_REGION=us-east-1
 AWS_ACCESS_KEY_ID=local
 AWS_SECRET_ACCESS_KEY=local
 ```
 
-The `local` credentials are dummy credentials for DynamoDB Local. No real AWS account is needed for this project.
+The AWS credential values above are placeholders for **DynamoDB Local**; no AWS account is required. The repository's database client should use the same endpoint as Docker. Do not commit real secrets or private `.env` files.
 
-If you already have a working `backend/.env`, check its endpoint rather than replacing the file blindly. Also check any separate database connection file used by the backend so both use the same local endpoint.
+### 5. Start the backend
 
-**Do not commit `.env` files or real secrets to GitHub.**
-
-## Step 7 — Install backend dependencies
-
-From the `backend` folder, run:
+Open a terminal in the repository root:
 
 ```powershell
-npm.cmd install
+cd backend
+npm install
+npm run dev
 ```
 
-This installs the Node.js packages listed in `backend/package.json`.
-
-## Step 8 — Start the backend server
-
-Still inside `backend`, run:
-
-```powershell
-npm.cmd run dev
-```
-
-The backend should start on port `5000`. During our tests, the terminal displayed:
-
-```text
-Backend running on port 5000
-```
-
-Keep this terminal running while using the application.
-
-Open a **new** PowerShell terminal and test the API:
+The Express API should be available at `http://localhost:5000/api`. Verify its connection from another terminal:
 
 ```powershell
 Invoke-RestMethod http://localhost:5000/api/students
 ```
 
-A successful request should return student data or an empty list. If this returns a server error, check the backend terminal and confirm that DynamoDB Local is running and its tables are available.
+An empty array is a valid result for a database with no students.
 
-Other API collections are:
+### 6. Start the frontend
 
-```text
-http://localhost:5000/api/applications
-http://localhost:5000/api/interviews
-http://localhost:5000/api/offers
-http://localhost:5000/api/tasks
-```
-
-## Step 9 — Install frontend dependencies
-
-Open a **third terminal** in VS Code. Start from the main project folder and enter:
+Open a **separate terminal** in the repository root:
 
 ```powershell
 cd frontend
-npm.cmd install
+npm install
+npm run dev
 ```
 
-The frontend packages are installed using `frontend/package.json`.
+Open the local address Vite displays, normally **http://localhost:5173**.
 
-## Step 10 — Start the React frontend
+The frontend uses the API base URL configured in `frontend/src/api.js`. For a direct connection to the local Express server, set `VITE_API_URL=http://localhost:5000/api` in `frontend/.env` if needed, then restart Vite. A Vite `/api` proxy may alternatively be configured in the frontend project.
 
-In that same `frontend` terminal, run:
+### Services at a glance
 
-```powershell
-npm.cmd run dev
-```
-
-Vite normally displays a local URL such as:
-
-```text
-http://localhost:5173/
-```
-
-Open the URL shown in your terminal. Our frontend sends requests to `/api`, which the local Vite setup is intended to forward to the Express backend on port `5000`.
-
-The three parts need to be available at the same time:
-
-| Part | Where it runs |
+| Service | Local address |
 | --- | --- |
+| Frontend | `http://localhost:5173` |
+| Backend API | `http://localhost:5000/api` |
 | DynamoDB Local | `http://localhost:8002` |
-| Express backend | `http://localhost:5000` |
-| React frontend | `http://localhost:5173` |
 
-**Frontend API setting:** The frontend's `src/api.js` uses `/api` by default. If your Vite proxy is not configured, you can instead create `frontend/.env` containing `VITE_API_URL=http://localhost:5000/api` and restart the frontend. The backend must also allow requests from the frontend's origin for direct cross-origin calls.
+## Application workflow
 
-## Step 11 — Use the application
+A job application represents the **stage reached** in the hiring process. Interviews and offers are separate records with their own statuses.
 
-Once the frontend opens:
-
-1. Go to **Students** and create a student record.
-2. Go to **Applications** and add a job application for that student.
-3. Add an **Interview** or **Offer** to an existing application if needed.
-4. Use **Tasks** to set reminders, either with or without a related application.
-5. Open the **Dashboard** to view the stored information.
-6. Edit a record and refresh the page to confirm the information was saved to DynamoDB Local.
-
-Application statuses include `Applied`, `Screening`, `Interview`, `Offer`, `Rejected`, and `Withdrawn`. Interview types include `Online`, `Phone`, and `In Person`. Offer decisions include `Pending`, `Accepted`, and `Declined`. Task statuses include `Pending`, `In Progress`, and `Completed`.
-
-## Step 12 — Stop and restart the project
-
-When finished, press **Ctrl + C** in the backend and frontend terminals.
-
-You can leave the DynamoDB container running, or stop it with:
-
-```powershell
-docker stop student-placement-db
+```text
+Create student
+     ↓
+Create application → Applied
+     ↓
+Schedule interview → Application stage: Interview
+     ↓
+Receive offer → Application stage: Offer
+     ↓
+Record decision → Offer: Pending / Accepted / Declined
 ```
 
-To use the project again later:
+**Important behavior:**
 
-```powershell
-# In the project root, if the database container is stopped:
-docker start student-placement-db
+- Creating an interview can advance an application from `Applied` or `Screening` to `Interview`.
+- Creating or updating an offer sets the associated application's stage to `Offer`.
+- A declined offer remains an **offer received**; the offer's decision becomes `Declined`, while the application's stage remains `Offer`.
+- Interview status is independent. The interview remains `Scheduled`, `Completed`, or `Cancelled` until explicitly updated; it is not deleted when an offer is received.
+- Application and interview records are retained so the placement journey can be reviewed later.
+
+### Example use case
+
+A student creates an application for a QA Analyst position at Dell, schedules an online interview, and then receives an offer. The application stage becomes `Offer`; the interview record remains visible; the offer stores its salary, deadline, and final acceptance/decline decision.
+
+## API reference
+
+**Base URL:** `http://localhost:5000/api`
+
+| Resource | GET collection | POST | GET by ID | PUT by ID | DELETE by ID |
+| --- | --- | --- | --- | --- | --- |
+| Students | `/students` | `/students` | `/students/:id` | `/students/:id` | `/students/:id` |
+| Applications | `/applications` | `/applications` | `/applications/:id` | `/applications/:id` | `/applications/:id` |
+| Interviews | `/interviews` | `/interviews` | `/interviews/:id` | `/interviews/:id` | `/interviews/:id` |
+| Offers | `/offers` | `/offers` | `/offers/:id` | `/offers/:id` | `/offers/:id` |
+| Tasks | `/tasks` | `/tasks` | `/tasks/:id` | `/tasks/:id` | `/tasks/:id` |
+
+Additional application history endpoint:
+
+```http
+GET /api/applications/:id/history
 ```
 
-Then open two terminals:
+Permanent student deletion requires the explicit query parameter used by the frontend confirmation flow:
 
-**Backend terminal:**
-
-```powershell
-cd backend
-npm.cmd run dev
+```http
+DELETE /api/students/:id?confirm=DELETE
 ```
 
-**Frontend terminal:**
+**Common HTTP results:** `200` (success), `201` (created), `400` (invalid request), `404` (missing record), `409` (conflict), and `500` (unexpected server/database error).
+
+### Example: create a student
+
+```powershell
+$body = @{
+  name = "Sample Student"
+  email = "sample.student@example.com"
+  major = "Computer Science"
+  graduationYear = "2027"
+} | ConvertTo-Json
+
+Invoke-RestMethod `
+  -Method Post `
+  -Uri "http://localhost:5000/api/students" `
+  -ContentType "application/json" `
+  -Body $body
+```
+
+The backend generates the student identifier. Use the returned `studentId` when creating related applications or tasks.
+
+## Testing
+
+The application has been developed and manually exercised through the frontend and API. The checklist below is intended for **final verification** on a running local instance; it is not a claim of automated test coverage.
+
+| Test | Expected result |
+| --- | --- |
+| Create/edit a student | Student information persists after refresh. |
+| Add an application | The application belongs to the selected student. |
+| Schedule an interview | Interview is saved; the parent application advances to `Interview` when eligible. |
+| Create/update an offer | Offer is saved; the parent application stage is `Offer`. |
+| Decline an offer | Offer decision becomes `Declined`; the application remains at stage `Offer`. |
+| Create and complete a task | Task status and dashboard counts update correctly. |
+| Delete a temporary student with linked records | Confirmation is required, linked records are removed, and affected lists refresh. |
+| Restart Express and refresh the browser | Previously saved records remain in DynamoDB Local. |
+| Use an empty database | Lists and dashboard show zero/empty states without sample records. |
+
+A frontend production build can be checked with:
 
 ```powershell
 cd frontend
-npm.cmd run dev
+npm run build
 ```
 
-You do not have to run `npm install` every time, unless dependencies changed or `node_modules` was removed.
+For API troubleshooting, inspect **Developer Tools → Network** in the browser and the Express server terminal. Run destructive tests only with temporary records.
+
+## Project structure
+
+```text
+student-placement-tracker/
+├── backend/
+│   ├── src/
+│   │   ├── config/          # DynamoDB client and configuration
+│   │   ├── controllers/     # Request validation and HTTP responses
+│   │   ├── routes/          # API route definitions
+│   │   ├── services/        # Database operations and business logic
+│   │   └── server.js        # Backend entry point
+│   └── package.json
+├── database/                # DynamoDB initialization and development scripts
+├── frontend/
+│   ├── src/
+│   │   ├── components/      # Reusable UI components
+│   │   ├── config/          # Forms and navigation definitions
+│   │   ├── pages/           # Dashboard and resource pages
+│   │   ├── App.jsx          # Application routing and orchestration
+│   │   └── api.js           # HTTP client helper
+│   └── package.json
+├── docs/                    # Project documentation
+├── presentation/            # Presentation material
+├── docker-compose.yml       # DynamoDB Local container configuration
+└── README.md
+```
+
+## Troubleshooting
+
+| Symptom | Recommended check |
+| --- | --- |
+| `API unavailable` in frontend | Confirm Express is running on port `5000`; verify the frontend API URL or proxy. |
+| DynamoDB connection error | Start Docker, confirm host port `8002`, and inspect `DYNAMODB_ENDPOINT`. |
+| Missing-table error | Initialize all six tables and their indexes against the same DynamoDB Local instance. |
+| Docker container name already in use | Inspect existing containers with `docker ps -a`; do not delete persistent volumes to clear the error. |
+| `400` on create/update | Check required fields, supported status values, and associated record IDs. |
+| Student deletion says confirmation required | Ensure the DELETE request contains `?confirm=DELETE`. |
+| Records disappear after a restart | Check that DynamoDB Local uses persistent storage and that the same container/endpoint is being used. |
+| UI shows stale counts | Refresh the data and inspect the API response in the browser's Network panel. |
+
+## Scope and limitations
+
+PlacementHub is intended for **local development, coursework, and demonstration**. It is not presented as a production-ready student information system.
+
+- **No hosted database is required:** DynamoDB Local runs on the development machine.
+- **No authentication or role-based authorization is claimed:** Add access controls before deploying with real student information.
+- **Deletion is permanent:** The student cascade-delete operation is limited to a single DynamoDB transaction of up to 100 records. Concurrent writes during a delete require additional safeguards for production use.
+- **Data privacy:** Do not commit real student information, `.env` files, credentials, or local database files to the repository.
+- **Validation:** Final checks should be performed against the latest code and database configuration before submission or deployment.
 
 ---
 
-## Main API routes
-
-| Feature | Endpoint | Common operations |
-| --- | --- | --- |
-| Students | `/api/students` | GET, POST, PUT, DELETE |
-| Applications | `/api/applications` | GET, POST, PUT, DELETE |
-| Interviews | `/api/interviews` | GET, POST, PUT, DELETE |
-| Offers | `/api/offers` | GET, POST, PUT, DELETE |
-| Tasks | `/api/tasks` | GET, POST, PUT, DELETE |
-
-Requests for an individual record use an ID in the URL. The application also provides status-history data for job applications.
-
-## What we tested
-
-During development, we tested adding and editing students and applications, saving interview and offer records, changing application statuses, creating tasks without a related application, and viewing saved records after refreshing the page.
-
-We also fixed differences between frontend and backend values, such as interview types and offer statuses. The application location field and optional task application field were updated so their values could be saved correctly.
-
-Student deletion with linked applications or tasks should still be checked carefully before final submission.
-
-## Problems we encountered
-
-### Docker says the container name is already in use
-
-This means a container called `student-placement-db` already exists. Check it with:
-
-```powershell
-docker ps -a --filter "name=student-placement-db"
-```
-
-If it is stopped, use `docker start student-placement-db`. If it is running, use the existing container. Do not delete it just to remove the error.
-
-### Docker container is running, but the backend cannot access the database
-
-Check the `DYNAMODB_ENDPOINT` value in `backend/.env` and `backend/src/config/db.js`. It should resolve to `http://localhost:8002` for this local setup. Then check whether the six database tables have been created.
-
-### Backend does not start
-
-Check that you ran `npm.cmd install` inside `backend`, that port `5000` is available, and that the backend terminal shows the full error message.
-
-### Frontend shows that the API is unavailable
-
-Make sure the backend is running on port `5000`. Check `frontend/src/api.js` and the Vite proxy setting, then refresh the browser.
-
-### A record does not save or update
-
-Open **F12 > Network** in the browser, select the API request, and compare its **Payload** and **Response**. The backend terminal usually provides more detail about validation or database errors.
-
-### The installation scripts cannot be found
-
-Check which files are actually present in `database/`. If a script listed in this README was removed or renamed, use the existing equivalent script or restore the missing setup file. Do not execute a similarly named file without checking what it changes.
-
----
-
-## How to push the project to GitHub
-
-From the main `student-placement-tracker` folder:
-
-```powershell
-git status
-git add README.md
-git commit -m "Update project README with installation instructions"
-git push origin main
-```
-
-If an older `database/README.md` still exists, remove it after checking that all useful information is included in this main README:
-
-```powershell
-Remove-Item database/README.md
-git add -A -- README.md database/README.md
-git commit -m "Keep one README for the project"
-git push origin main
-```
-
-Use the second commit sequence **only if there are changes left to commit**; if Git says the working tree is clean, there is nothing new to commit.
-
-Avoid pushing `.env`, `node_modules`, or local database files.
-
-## Project repository
-
-https://github.com/madarianusha/student-placement-tracker
+**Repository:** [Student Placement Tracker](https://github.com/madarianusha/student-placement-tracker)  
+**Built for:** NoSQL database course project
