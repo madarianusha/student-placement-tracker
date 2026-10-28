@@ -45,6 +45,7 @@ async function getAllTasks(studentId) {
 
     tasks.push(...(result.Items || []));
     lastKey = result.LastEvaluatedKey;
+
   } while (lastKey);
 
   return tasks;
@@ -55,7 +56,9 @@ async function getTaskById(id) {
   const result = await dynamoDB.send(
     new GetCommand({
       TableName: TABLE_NAME,
-      Key: { taskId: id }
+      Key: {
+        taskId: id
+      }
     })
   );
 
@@ -67,18 +70,26 @@ async function createTask(data) {
   const task = {
     taskId: randomUUID(),
     studentId: data.studentId,
-    applicationId: data.applicationId || null,
     taskTitle: data.taskTitle,
     dueDate: data.dueDate,
     priority: data.priority || "Medium",
-    taskStatus: "Pending"
+    taskStatus: data.taskStatus || "Pending"
   };
+
+  // Add applicationId only when an application is selected
+  if (
+    typeof data.applicationId === "string" &&
+    data.applicationId.trim() !== ""
+  ) {
+    task.applicationId = data.applicationId.trim();
+  }
 
   await dynamoDB.send(
     new PutCommand({
       TableName: TABLE_NAME,
       Item: task,
-      ConditionExpression: "attribute_not_exists(taskId)"
+      ConditionExpression:
+        "attribute_not_exists(taskId)"
     })
   );
 
@@ -89,7 +100,9 @@ async function createTask(data) {
 async function updateTask(id, data) {
   const existing = await getTaskById(id);
 
-  if (!existing) return null;
+  if (!existing) {
+    return null;
+  }
 
   const allowedFields = [
     "taskTitle",
@@ -101,7 +114,12 @@ async function updateTask(id, data) {
   const updated = { ...existing };
 
   for (const field of allowedFields) {
-    if (Object.prototype.hasOwnProperty.call(data, field)) {
+    if (
+      Object.prototype.hasOwnProperty.call(
+        data,
+        field
+      )
+    ) {
       updated[field] = data[field];
     }
   }
@@ -110,7 +128,8 @@ async function updateTask(id, data) {
     new PutCommand({
       TableName: TABLE_NAME,
       Item: updated,
-      ConditionExpression: "attribute_exists(taskId)"
+      ConditionExpression:
+        "attribute_exists(taskId)"
     })
   );
 
@@ -121,13 +140,18 @@ async function updateTask(id, data) {
 async function deleteTask(id) {
   const existing = await getTaskById(id);
 
-  if (!existing) return false;
+  if (!existing) {
+    return false;
+  }
 
   await dynamoDB.send(
     new DeleteCommand({
       TableName: TABLE_NAME,
-      Key: { taskId: id },
-      ConditionExpression: "attribute_exists(taskId)"
+      Key: {
+        taskId: id
+      },
+      ConditionExpression:
+        "attribute_exists(taskId)"
     })
   );
 

@@ -1,12 +1,14 @@
 
 const service = require("../services/studentService");
+const taskService = require("../services/taskService");
 
-// GET - Retrieve all students
+// GET ALL STUDENTS
 exports.getAll = async (req, res) => {
   try {
     const students = await service.getAllStudents();
 
     res.status(200).json(students);
+
   } catch (error) {
     console.error("Error fetching students:", error);
 
@@ -16,10 +18,12 @@ exports.getAll = async (req, res) => {
   }
 };
 
-// GET - Retrieve student by ID
+// GET STUDENT BY ID
 exports.getById = async (req, res) => {
   try {
-    const student = await service.getStudentById(req.params.id);
+    const student = await service.getStudentById(
+      req.params.id
+    );
 
     if (!student) {
       return res.status(404).json({
@@ -28,6 +32,7 @@ exports.getById = async (req, res) => {
     }
 
     res.status(200).json(student);
+
   } catch (error) {
     console.error("Error fetching student:", error);
 
@@ -37,10 +42,15 @@ exports.getById = async (req, res) => {
   }
 };
 
-// POST - Create a student
+// CREATE STUDENT
 exports.create = async (req, res) => {
   try {
-    const { name, email, major, graduationYear } = req.body;
+    const {
+      name,
+      email,
+      major,
+      graduationYear
+    } = req.body;
 
     if (
       typeof name !== "string" ||
@@ -58,14 +68,20 @@ exports.create = async (req, res) => {
       email: email.trim()
     };
 
-    if (major !== undefined) studentData.major = major;
+    if (major !== undefined) {
+      studentData.major = major;
+    }
+
     if (graduationYear !== undefined) {
       studentData.graduationYear = graduationYear;
     }
 
-    const student = await service.createStudent(studentData);
+    const student = await service.createStudent(
+      studentData
+    );
 
     res.status(201).json(student);
+
   } catch (error) {
     console.error("Error creating student:", error);
 
@@ -75,7 +91,7 @@ exports.create = async (req, res) => {
   }
 };
 
-// PUT - Update student information
+// UPDATE STUDENT
 exports.update = async (req, res) => {
   try {
     const student = await service.updateStudent(
@@ -90,6 +106,7 @@ exports.update = async (req, res) => {
     }
 
     res.status(200).json(student);
+
   } catch (error) {
     console.error("Error updating student:", error);
 
@@ -99,10 +116,56 @@ exports.update = async (req, res) => {
   }
 };
 
-// DELETE - Delete student
+// DELETE STUDENT
+
 exports.remove = async (req, res) => {
   try {
-    const deleted = await service.deleteStudent(req.params.id);
+    const studentId = req.params.id;
+
+    // Step 1: Check student exists
+    const student = await service.getStudentById(studentId);
+
+    if (!student) {
+      return res.status(404).json({
+        message: "Student not found"
+      });
+    }
+
+    // Step 2: Retrieve applications and tasks
+    const [applications, tasks] = await Promise.all([
+      applicationService.getAllApplications(),
+      taskService.getAllTasks()
+    ]);
+
+    // Step 3: Find records belonging to this student
+    const linkedApplications = applications.filter(
+      app => app.studentId === studentId
+    );
+
+    const linkedTasks = tasks.filter(
+      task => task.studentId === studentId
+    );
+
+    // Debugging information
+    console.log("Student deletion check:", {
+      studentId,
+      applications: linkedApplications.length,
+      tasks: linkedTasks.length
+    });
+
+    // Step 4: Prevent deletion when records exist
+    if (
+      linkedApplications.length > 0 ||
+      linkedTasks.length > 0
+    ) {
+      return res.status(409).json({
+        message:
+          "Cannot delete student. Delete linked applications and tasks first."
+      });
+    }
+
+    // Step 5: Delete student only when safe
+    const deleted = await service.deleteStudent(studentId);
 
     if (!deleted) {
       return res.status(404).json({
@@ -113,8 +176,16 @@ exports.remove = async (req, res) => {
     res.status(200).json({
       message: "Student deleted successfully"
     });
+
   } catch (error) {
-    console.error("Error deleting student:", error);
+    if (error.code === "STUDENT_HAS_LINKED_RECORDS") {
+      return res.status(409).json({
+        message:
+          "Cannot delete student. Delete linked applications and tasks first."
+      });
+    }
+
+    console.error("Student deletion error:", error);
 
     res.status(500).json({
       message: "Failed to delete student"

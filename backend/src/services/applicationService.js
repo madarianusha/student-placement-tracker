@@ -22,7 +22,8 @@ const validStatuses = [
   "Screening",
   "Interview",
   "Offer",
-  "Rejected"
+  "Rejected",
+  "Withdrawn"
 ];
 
 // GET ALL APPLICATIONS
@@ -66,6 +67,7 @@ async function createApplication(data) {
     studentId: data.studentId,
     company: data.company,
     jobTitle: data.jobTitle,
+    location: data.location || "",
     status: "Applied",
     appliedDate:
       data.appliedDate ||
@@ -95,6 +97,7 @@ async function updateApplication(id, data) {
   const allowedFields = [
     "company",
     "jobTitle",
+    "location",
     "status",
     "appliedDate"
   ];

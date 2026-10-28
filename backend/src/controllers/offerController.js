@@ -4,12 +4,29 @@ const applicationService = require("../services/applicationService");
 
 const validStatuses = ["Pending", "Accepted", "Declined"];
 
-function validSalary(salary) {
-  return typeof salary === "number" &&
-    Number.isFinite(salary) &&
-    salary >= 0;
+// Validate and convert salary to a number
+function parseSalary(salary) {
+  if (
+    typeof salary !== "number" &&
+    typeof salary !== "string"
+  ) {
+    return null;
+  }
+
+  if (typeof salary === "string" && salary.trim() === "") {
+    return null;
+  }
+
+  const amount = Number(salary);
+
+  if (!Number.isFinite(amount) || amount < 0) {
+    return null;
+  }
+
+  return amount;
 }
 
+// Validate date format
 function validDate(date) {
   return typeof date === "string" &&
     /^\d{4}-\d{2}-\d{2}$/.test(date) &&
@@ -59,31 +76,55 @@ exports.create = async (req, res) => {
       applicationId,
       offerDate,
       salary,
-      responseDeadline
+      responseDeadline,
+      offerStatus = "Pending"
     } = req.body;
 
-    if (!applicationId || !offerDate ||
-        salary === undefined || !responseDeadline) {
+    // Check required fields
+    if (
+      !applicationId ||
+      !offerDate ||
+      salary === undefined ||
+      salary === null ||
+      !responseDeadline
+    ) {
       return res.status(400).json({
-        message: "applicationId, offerDate, salary, and responseDeadline are required"
+        message:
+          "applicationId, offerDate, salary, and responseDeadline are required"
       });
     }
 
-    if (!validSalary(salary)) {
+    // Validate salary
+    const parsedSalary = parseSalary(salary);
+
+    if (parsedSalary === null) {
       return res.status(400).json({
         message: "Salary must be a non-negative number"
       });
     }
 
-    if (!validDate(offerDate) ||
-        !validDate(responseDeadline)) {
+    // Validate dates
+    if (
+      !validDate(offerDate) ||
+      !validDate(responseDeadline)
+    ) {
       return res.status(400).json({
         message: "Invalid offer date or response deadline"
       });
     }
 
+    // Validate offer status
+    if (!validStatuses.includes(offerStatus)) {
+      return res.status(400).json({
+        message: "Invalid offer status"
+      });
+    }
+
+    // Check application exists
     const application =
-      await applicationService.getApplicationById(applicationId);
+      await applicationService.getApplicationById(
+        applicationId
+      );
 
     if (!application) {
       return res.status(404).json({
@@ -91,17 +132,20 @@ exports.create = async (req, res) => {
       });
     }
 
+    // Create offer
     const offer = await service.createOffer({
       applicationId,
       offerDate,
-      salary,
-      responseDeadline
+      salary: parsedSalary,
+      responseDeadline,
+      offerStatus
     });
 
     res.status(201).json(offer);
 
   } catch (error) {
-    console.error(error);
+    console.error("Create offer error:", error);
+
     res.status(500).json({
       message: "Failed to create offer"
     });
@@ -111,33 +155,55 @@ exports.create = async (req, res) => {
 // UPDATE OFFER
 exports.update = async (req, res) => {
   try {
-    const { offerStatus, salary, offerDate, responseDeadline } =
-      req.body;
+    const {
+      offerStatus,
+      salary,
+      offerDate,
+      responseDeadline
+    } = req.body;
 
-    if (offerStatus !== undefined &&
-        !validStatuses.includes(offerStatus)) {
+    // Validate offer status
+    if (
+      offerStatus !== undefined &&
+      !validStatuses.includes(offerStatus)
+    ) {
       return res.status(400).json({
         message: "Invalid offer status"
       });
     }
 
-    if (salary !== undefined && !validSalary(salary)) {
-      return res.status(400).json({
-        message: "Invalid salary"
-      });
+    // Prepare update data
+    const updateData = { ...req.body };
+
+    // Validate salary if provided
+    if (salary !== undefined) {
+      const parsedSalary = parseSalary(salary);
+
+      if (parsedSalary === null) {
+        return res.status(400).json({
+          message: "Invalid salary"
+        });
+      }
+
+      updateData.salary = parsedSalary;
     }
 
-    if ((offerDate !== undefined && !validDate(offerDate)) ||
-        (responseDeadline !== undefined &&
-         !validDate(responseDeadline))) {
+    // Validate dates if provided
+    if (
+      (offerDate !== undefined &&
+        !validDate(offerDate)) ||
+      (responseDeadline !== undefined &&
+        !validDate(responseDeadline))
+    ) {
       return res.status(400).json({
         message: "Invalid offer date or response deadline"
       });
     }
 
+    // Update offer
     const offer = await service.updateOffer(
       req.params.id,
-      req.body
+      updateData
     );
 
     if (!offer) {
@@ -149,7 +215,8 @@ exports.update = async (req, res) => {
     res.json(offer);
 
   } catch (error) {
-    console.error(error);
+    console.error("Update offer error:", error);
+
     res.status(500).json({
       message: "Failed to update offer"
     });
@@ -159,7 +226,9 @@ exports.update = async (req, res) => {
 // DELETE OFFER
 exports.remove = async (req, res) => {
   try {
-    const deleted = await service.deleteOffer(req.params.id);
+    const deleted = await service.deleteOffer(
+      req.params.id
+    );
 
     if (!deleted) {
       return res.status(404).json({
@@ -172,7 +241,8 @@ exports.remove = async (req, res) => {
     });
 
   } catch (error) {
-    console.error(error);
+    console.error("Delete offer error:", error);
+
     res.status(500).json({
       message: "Failed to delete offer"
     });

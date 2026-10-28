@@ -45,6 +45,7 @@ async function getAllOffers(applicationId) {
 
     offers.push(...(result.Items || []));
     lastKey = result.LastEvaluatedKey;
+
   } while (lastKey);
 
   return offers;
@@ -55,7 +56,9 @@ async function getOfferById(id) {
   const result = await dynamoDB.send(
     new GetCommand({
       TableName: TABLE_NAME,
-      Key: { offerId: id }
+      Key: {
+        offerId: id
+      }
     })
   );
 
@@ -69,7 +72,7 @@ async function createOffer(data) {
     applicationId: data.applicationId,
     offerDate: data.offerDate,
     salary: data.salary,
-    offerStatus: "Pending",
+    offerStatus: data.offerStatus ?? "Pending",
     responseDeadline: data.responseDeadline
   };
 
@@ -77,7 +80,8 @@ async function createOffer(data) {
     new PutCommand({
       TableName: TABLE_NAME,
       Item: offer,
-      ConditionExpression: "attribute_not_exists(offerId)"
+      ConditionExpression:
+        "attribute_not_exists(offerId)"
     })
   );
 
@@ -88,7 +92,9 @@ async function createOffer(data) {
 async function updateOffer(id, data) {
   const existing = await getOfferById(id);
 
-  if (!existing) return null;
+  if (!existing) {
+    return null;
+  }
 
   const allowedFields = [
     "offerDate",
@@ -100,7 +106,12 @@ async function updateOffer(id, data) {
   const updated = { ...existing };
 
   for (const field of allowedFields) {
-    if (Object.prototype.hasOwnProperty.call(data, field)) {
+    if (
+      Object.prototype.hasOwnProperty.call(
+        data,
+        field
+      )
+    ) {
       updated[field] = data[field];
     }
   }
@@ -109,7 +120,8 @@ async function updateOffer(id, data) {
     new PutCommand({
       TableName: TABLE_NAME,
       Item: updated,
-      ConditionExpression: "attribute_exists(offerId)"
+      ConditionExpression:
+        "attribute_exists(offerId)"
     })
   );
 
@@ -120,13 +132,18 @@ async function updateOffer(id, data) {
 async function deleteOffer(id) {
   const existing = await getOfferById(id);
 
-  if (!existing) return false;
+  if (!existing) {
+    return false;
+  }
 
   await dynamoDB.send(
     new DeleteCommand({
       TableName: TABLE_NAME,
-      Key: { offerId: id },
-      ConditionExpression: "attribute_exists(offerId)"
+      Key: {
+        offerId: id
+      },
+      ConditionExpression:
+        "attribute_exists(offerId)"
     })
   );
 

@@ -9,20 +9,20 @@ const {
   TransactWriteCommand
 } = require("@aws-sdk/lib-dynamodb");
 
-// GET all applications
+// GET ALL APPLICATIONS
 exports.getAll = async (req, res) => {
   try {
     const applications = await service.getAllApplications();
     res.json(applications);
   } catch (error) {
-    console.error(error);
+    console.error("Get applications error:", error);
     res.status(500).json({
       message: "Failed to fetch applications"
     });
   }
 };
 
-// GET application by ID
+// GET APPLICATION BY ID
 exports.getById = async (req, res) => {
   try {
     const application = await service.getApplicationById(
@@ -37,25 +37,46 @@ exports.getById = async (req, res) => {
 
     res.json(application);
   } catch (error) {
-    console.error(error);
+    console.error("Get application error:", error);
     res.status(500).json({
       message: "Failed to fetch application"
     });
   }
 };
 
-// POST create application
+// CREATE APPLICATION
 exports.create = async (req, res) => {
   try {
-    const { studentId, company, jobTitle, appliedDate } = req.body;
+    const {
+      studentId,
+      company,
+      jobTitle,
+      location,
+      appliedDate
+    } = req.body;
 
+    // Validate required fields
     if (!studentId || !company || !jobTitle) {
       return res.status(400).json({
-        message: "studentId, company, and jobTitle are required"
+        message:
+          "studentId, company, and jobTitle are required"
       });
     }
 
-    const student = await studentService.getStudentById(studentId);
+    // Validate optional location
+    if (
+      location !== undefined &&
+      typeof location !== "string"
+    ) {
+      return res.status(400).json({
+        message: "Location must be a string"
+      });
+    }
+
+    // Check student exists
+    const student = await studentService.getStudentById(
+      studentId
+    );
 
     if (!student) {
       return res.status(404).json({
@@ -63,28 +84,32 @@ exports.create = async (req, res) => {
       });
     }
 
+    // Create application with location
     const application = await service.createApplication({
       studentId,
       company,
       jobTitle,
+      location: location?.trim() || "",
       appliedDate
     });
 
     res.status(201).json(application);
+
   } catch (error) {
-    console.error(error);
+    console.error("Create application error:", error);
     res.status(500).json({
       message: "Failed to create application"
     });
   }
 };
 
-// PUT update application
+// UPDATE APPLICATION
 exports.update = async (req, res) => {
   try {
     const allowedFields = [
       "company",
       "jobTitle",
+      "location",
       "status",
       "appliedDate"
     ];
@@ -92,11 +117,31 @@ exports.update = async (req, res) => {
     const data = {};
 
     for (const field of allowedFields) {
-      if (Object.prototype.hasOwnProperty.call(req.body, field)) {
+      if (
+        Object.prototype.hasOwnProperty.call(
+          req.body,
+          field
+        )
+      ) {
         data[field] = req.body[field];
       }
     }
 
+    // Validate location
+    if (
+      data.location !== undefined &&
+      typeof data.location !== "string"
+    ) {
+      return res.status(400).json({
+        message: "Location must be a string"
+      });
+    }
+
+    if (data.location !== undefined) {
+      data.location = data.location.trim();
+    }
+
+    // Validate application status
     if (
       data.status !== undefined &&
       !service.validStatuses.includes(data.status)
@@ -106,6 +151,7 @@ exports.update = async (req, res) => {
       });
     }
 
+    // Update application
     const application = await service.updateApplication(
       req.params.id,
       data
@@ -118,15 +164,16 @@ exports.update = async (req, res) => {
     }
 
     res.json(application);
+
   } catch (error) {
-    console.error(error);
+    console.error("Update application error:", error);
     res.status(500).json({
       message: "Failed to update application"
     });
   }
 };
 
-// Find records linked to an application
+// FIND RECORDS LINKED TO AN APPLICATION
 async function linkedItems(table, applicationId) {
   const items = [];
   let lastKey;
@@ -151,7 +198,7 @@ async function linkedItems(table, applicationId) {
   return items;
 }
 
-// DELETE application
+// DELETE APPLICATION
 exports.remove = async (req, res) => {
   const applicationId = req.params.id;
 
@@ -179,7 +226,7 @@ exports.remove = async (req, res) => {
         linkedItems("ApplicationActivity", applicationId)
       ]);
 
-    // Prevent deleting applications with linked records
+    // Prevent deletion when linked records exist
     if (
       interviews.length > 0 ||
       offers.length > 0 ||
@@ -191,7 +238,7 @@ exports.remove = async (req, res) => {
       });
     }
 
-    // DynamoDB transactions support up to 100 operations
+    // Check transaction limit
     if (history.length > 99) {
       return res.status(409).json({
         message:
@@ -199,7 +246,7 @@ exports.remove = async (req, res) => {
       });
     }
 
-    // Delete internal history and application together
+    // Prepare history deletion operations
     const operations = history.map((item) => ({
       Delete: {
         TableName: "ApplicationActivity",
@@ -209,6 +256,7 @@ exports.remove = async (req, res) => {
       }
     }));
 
+    // Include application deletion
     operations.push({
       Delete: {
         TableName: "JobApplications",
@@ -218,6 +266,7 @@ exports.remove = async (req, res) => {
       }
     });
 
+    // Execute transaction
     await db.send(
       new TransactWriteCommand({
         TransactItems: operations
@@ -231,7 +280,9 @@ exports.remove = async (req, res) => {
   } catch (error) {
     console.error("Delete application error:", error);
 
-    if (error.name === "TransactionCanceledException") {
+    if (
+      error.name === "TransactionCanceledException"
+    ) {
       return res.status(409).json({
         message:
           "Application deletion could not be completed. Refresh and try again."
@@ -244,7 +295,7 @@ exports.remove = async (req, res) => {
   }
 };
 
-// GET application status history
+// GET APPLICATION STATUS HISTORY
 exports.history = async (req, res) => {
   try {
     const application = await service.getApplicationById(
@@ -262,8 +313,9 @@ exports.history = async (req, res) => {
     );
 
     res.json(history);
+
   } catch (error) {
-    console.error(error);
+    console.error("Get application history error:", error);
     res.status(500).json({
       message: "Failed to fetch application history"
     });

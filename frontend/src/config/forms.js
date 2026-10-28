@@ -1,4 +1,6 @@
+
 import { STATUS_CHOICES, todayISO } from '../format.js';
+
 export const SCHEMA = {
   students: {
     singular: 'Student',
@@ -9,6 +11,7 @@ export const SCHEMA = {
       { name:'graduationYear', label:'Graduation year', placeholder:'2027' }
     ]
   },
+
   applications: {
     singular: 'Application',
     fields: [
@@ -20,26 +23,29 @@ export const SCHEMA = {
       { name:'appliedDate', label:'Date applied', type:'date', required:true }
     ]
   },
+
   interviews: {
     singular: 'Interview',
     fields: [
       { name:'applicationId', label:'Job application', type:'application', required:true },
       { name:'interviewDate', label:'Interview date', type:'date', required:true },
-      { name:'interviewType', label:'Interview type', type:'select', options:['Phone','Video','Technical','Behavioral','On-site','Other'], required:true },
+      { name:'interviewType', label:'Interview type', type:'select', options:['Online','Phone','In Person'], required:true },
       { name:'interviewStatus', label:'Interview status', type:'select', options:['Scheduled','Completed','Cancelled','Rescheduled'], required:true },
       { name:'notes', label:'Notes', type:'textarea', placeholder:'Preparation details, interviewers, or follow-up notes' }
     ]
   },
+
   offers: {
     singular: 'Offer',
     fields: [
       { name:'applicationId', label:'Job application', type:'application', required:true },
       { name:'offerDate', label:'Offer date', type:'date', required:true },
-      { name:'salary', label:'Salary (USD)', type:'number', placeholder:'85000' },
-      { name:'offerStatus', label:'Offer status', type:'select', options:['Pending','Accepted','Declined','Expired'], required:true },
-      { name:'responseDeadline', label:'Response deadline', type:'date' }
+      { name:'salary', label:'Salary (USD)', type:'number', required:true, placeholder:'85000' },
+      { name:'offerStatus', label:'Offer status', type:'select', options:['Pending','Accepted','Declined'], required:true },
+      { name:'responseDeadline', label:'Response deadline', type:'date', required:true }
     ]
   },
+
   tasks: {
     singular: 'Task',
     fields: [
@@ -56,8 +62,7 @@ export const SCHEMA = {
 export const DEFAULTS = {
   students: { name:'', email:'', major:'', graduationYear:'' },
   applications: { studentId:'', company:'', jobTitle:'', location:'', status:'Applied', appliedDate:todayISO() },
-  interviews: { applicationId:'', interviewDate:todayISO(), interviewType:'Video', interviewStatus:'Scheduled', notes:'' },
+  interviews: { applicationId:'', interviewDate:todayISO(), interviewType:'Online', interviewStatus:'Scheduled', notes:'' },
   offers: { applicationId:'', offerDate:todayISO(), salary:'', offerStatus:'Pending', responseDeadline:'' },
   tasks: { studentId:'', applicationId:'', taskTitle:'', dueDate:todayISO(), priority:'Medium', taskStatus:'Pending' }
 };
-
